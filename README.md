@@ -86,5 +86,19 @@ npx expo lint
 
 ### Menjalankan Pengujian Unit Spasial Haversine:
 ```bash
-node scripts/test-haversine.mjs
+npm test
+# atau
+node --experimental-strip-types scripts/test-haversine.mjs
 ```
+
+---
+
+## 5. Catatan Debugging Kompatibilitas Android & iOS
+
+Pada saat pengujian awal di perangkat Android, ditemukan runtime error fatal:
+```text
+Error while updating property 'accessibilityRole' of a view managed by: RCTView
+Invalid accessibility role value: region
+```
+- **Penyebab:** Properti W3C ARIA web `accessibilityRole="region"` digunakan pada container `SelectedReportCard.tsx`. Pada runtime native Android (React Native core `ReactAccessibilityDelegate.kt`), peran `"region"` tidak terdaftar dalam enum native accessibility role Android dan menyebabkan `IllegalArgumentException`. Pada iOS, nilai ini diabaikan sehingga tidak menyebabkan crash pada iPhone.
+- **Solusi:** Nilai `accessibilityRole` diperbarui menjadi `"summary"` yang merupakan role semantik resmi dan terdaftar baik di Android (`android.view.View` dengan `roleDescription = summary`) maupun di iOS (`UIAccessibilityTraitSummaryElement`). Crash berhasil terselesaikan secara tuntas tanpa merusak kompatibilitas iOS maupun aksesibilitas TalkBack/VoiceOver.

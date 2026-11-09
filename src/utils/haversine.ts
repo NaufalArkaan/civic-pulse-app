@@ -4,7 +4,7 @@
  * Role: Anggota 1 (Lead System Architect & Security Engineer)
  */
 
-import { Coordinate } from "../types/location";
+import type { Coordinate } from "../types/location";
 
 const EARTH_RADIUS_METERS = 6_371_000; // Radius rata-rata bumi (WGS84 spherical approximation)
 

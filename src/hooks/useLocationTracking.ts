@@ -2,7 +2,7 @@
  * Civic Pulse - Modul LBS
  * Hook: useLocationTracking
  * Contract & Baseline Implementation (Kolaborasi Anggota 1 & Anggota 3 - Robi)
- * Role: Anggota 1 (Lead System Architect & Security Engineer)
+ * Role: Anggota 3 (Lead Hardware & Spatial/Network Engineer) & Anggota 1 (Lead System Architect)
  *
  * Security & Reliability Safeguards:
  * 1. Hanya meminta foreground location (no background location).
@@ -10,6 +10,7 @@
  * 3. Pembersihan ketat subscription lama saat mode tracking berubah atau unmount.
  * 4. Tidak ada logging koordinat sensitif di production.
  * 5. Tidak ada persistensi lokasi personal ke storage lokal.
+ * 6. Adaptive distanceInterval & single-watcher guarantee.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -39,6 +40,14 @@ export function useLocationTracking(
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const isRequestingPermissionRef = useRef<boolean>(false);
 
+  // Lifecycle hook: mengelola status mount komponen secara global
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   /**
    * Helper untuk menghentikan dan membersihkan subscription aktif dengan aman
    */
@@ -65,18 +74,35 @@ export function useLocationTracking(
         return;
       }
 
-      const { status: permStatus } = await Location.getForegroundPermissionsAsync();
+      let { status: permStatus } = await Location.getForegroundPermissionsAsync();
+      if (permStatus !== Location.PermissionStatus.GRANTED) {
+        const req = await Location.requestForegroundPermissionsAsync();
+        permStatus = req.status;
+      }
+
       if (permStatus !== Location.PermissionStatus.GRANTED) {
         if (isMountedRef.current) {
           setStatus("permission-denied");
           setPermissionGranted(false);
-          setError("Izin lokasi belum diberikan.");
+          setError("Izin lokasi belum diberikan. Harap berikan izin di pengaturan perangkat.");
         }
         return;
       }
 
+      if (isMountedRef.current) {
+        setPermissionGranted(true);
+        setStatus("loading");
+      }
+
+      const accuracyLevel =
+        mode === "high"
+          ? Location.Accuracy.High
+          : mode === "low"
+          ? Location.Accuracy.Low
+          : Location.Accuracy.Balanced;
+
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: accuracyLevel,
       });
 
       if (!isMountedRef.current) return;
@@ -98,18 +124,13 @@ export function useLocationTracking(
         setError(err?.message || "Gagal memperbarui lokasi terkini.");
       }
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
-    isMountedRef.current = true;
-
     // Jika tracking dinonaktifkan dari options, bersihkan watcher
     if (!enabled) {
       cleanupSubscription();
-      return () => {
-        isMountedRef.current = false;
-        cleanupSubscription();
-      };
+      return;
     }
 
     let isEffectActive = true;
@@ -134,13 +155,17 @@ export function useLocationTracking(
           setStatus("requesting-permission");
         }
 
-        let { status: permStatus } = await Location.getForegroundPermissionsAsync();
-        if (permStatus !== Location.PermissionStatus.GRANTED) {
-          const req = await Location.requestForegroundPermissionsAsync();
-          permStatus = req.status;
+        let permStatus: Location.PermissionStatus;
+        try {
+          const currentPerm = await Location.getForegroundPermissionsAsync();
+          permStatus = currentPerm.status;
+          if (permStatus !== Location.PermissionStatus.GRANTED) {
+            const req = await Location.requestForegroundPermissionsAsync();
+            permStatus = req.status;
+          }
+        } finally {
+          isRequestingPermissionRef.current = false;
         }
-
-        isRequestingPermissionRef.current = false;
 
         if (permStatus !== Location.PermissionStatus.GRANTED) {
           if (isEffectActive && isMountedRef.current) {
@@ -158,10 +183,19 @@ export function useLocationTracking(
           setStatus("loading");
         }
 
-        // 3. Ambil posisi awal (initial position) untuk respons cepat UI
+        // 3. Konfigurasi adaptive interval dari TRACKING_CONFIG
+        const config = TRACKING_CONFIG[mode] || TRACKING_CONFIG.balanced;
+        const accuracyLevel =
+          mode === "high"
+            ? Location.Accuracy.High
+            : mode === "low"
+            ? Location.Accuracy.Low
+            : Location.Accuracy.Balanced;
+
+        // 4. Ambil posisi awal (initial position) untuk respons cepat UI
         try {
           const initialPos = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: accuracyLevel,
           });
 
           if (isEffectActive && isMountedRef.current) {
@@ -178,19 +212,10 @@ export function useLocationTracking(
           // Jika initial position timeout/gagal, watcher akan tetap mencoba di bawah
         }
 
-        // 4. Bersihkan subscription lama sebelum memulai watcher baru (menghindari duplikasi)
+        // 5. Bersihkan subscription lama sebelum memulai watcher baru (menghindari duplikasi)
         cleanupSubscription();
 
         if (!isEffectActive || !isMountedRef.current) return;
-
-        // 5. Konfigurasi adaptive interval dari TRACKING_CONFIG
-        const config = TRACKING_CONFIG[mode] || TRACKING_CONFIG.balanced;
-        const accuracyLevel =
-          mode === "high"
-            ? Location.Accuracy.High
-            : mode === "low"
-            ? Location.Accuracy.Low
-            : Location.Accuracy.Balanced;
 
         // 6. Mulai watchPositionAsync foreground
         const sub = await Location.watchPositionAsync(
@@ -200,7 +225,7 @@ export function useLocationTracking(
             timeInterval: config.timeInterval,
           },
           (newPosition) => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || !isEffectActive) return;
 
             const nextCoord: Coordinate = {
               latitude: newPosition.coords.latitude,
@@ -220,7 +245,7 @@ export function useLocationTracking(
           subscriptionRef.current = sub;
           setStatus("tracking");
         } else {
-          // Jika hook sudah unmount sebelum watcher siap, segera remove
+          // Jika hook sudah unmount atau mode berubah sebelum watcher siap, segera remove
           sub.remove();
         }
       } catch (err: any) {
@@ -235,7 +260,6 @@ export function useLocationTracking(
 
     return () => {
       isEffectActive = false;
-      isMountedRef.current = false;
       cleanupSubscription();
     };
   }, [enabled, mode, cleanupSubscription]);

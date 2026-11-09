@@ -80,7 +80,7 @@ export const SelectedReportCard = memo(function SelectedReportCard({
   return (
     <View
       style={[styles.cardContainer, { bottom: bottomPosition }]}
-      accessibilityRole="region"
+      accessibilityRole="summary"
       accessibilityLabel={`Rincian Laporan: ${report.title}. Kategori ${categoryMeta.label}, Jarak: ${distanceFormatted}`}
     >
       {/* Top Header: Simulation Flag & Close Button */}
