@@ -32,6 +32,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Civic Pulse membutuhkan izin lokasi foreground untuk mendeteksi posisi Anda terhadap laporan infrastruktur sekitar."
+        }
       ]
     ],
     "experiments": {

@@ -1,56 +1,90 @@
-# Welcome to your Expo app 👋
+# Civic Pulse (SDG 11) - Milestone 1: Modul LBS & Interactive Mapping Engine
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Civic Pulse adalah aplikasi mobile berbasis React Native & Expo untuk pelaporan kerusakan infrastruktur publik dan mitigasi bencana komunitas dalam kerangka **SDG 11 (Sustainable Cities and Communities)**.
 
-## Get started
+Dokumen ini merangkum arsitektur, pembagian peran, dan panduan pengujian untuk **Milestone 1 (Pertemuan 9)**.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 1. Arsitektur & Separation of Concerns
 
-2. Start the app
+Modul LBS dirancang dengan pemisahan tanggung jawab yang modular dan *loosely-coupled*:
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+src/
+├── app/                        # Expo Router Pages
+│   ├── _layout.tsx             # Root layout & Stack navigator
+│   └── index.tsx               # MapScreen: Orkestrasi Hook & Komponen UI
+├── components/
+│   └── map/                    # Presentational Components (UI Layer - Syahril)
+│       ├── CivicMap.tsx        # MapView wrapper & fallback region
+│       ├── UserLocationMarker.tsx # Custom pulse marker posisi pengguna
+│       ├── ReportMarker.tsx    # Marker laporan berdasarkan kategori & severity
+│       ├── SelectedReportCard.tsx # Bottom card detail & display jarak Haversine
+│       ├── MapControls.tsx     # Selektor mode adaptif & tombol 'Lokasi Saya'
+│       └── LocationStatusBanner.tsx # Status bar informatif & penanganan error
+├── constants/
+│   ├── map.ts                  # Konfigurasi zoom & Fallback Region (Malang/UMM)
+│   ├── sampleReports.ts        # Mock data berlabel "Data Simulasi"
+│   └── tracking.ts             # Adaptive distanceInterval (low: 50m, balanced: 20m, high: 5m)
+├── hooks/
+│   └── useLocationTracking.ts  # Hardware LBS Hook (Foreground watcher, cleanup, error)
+├── types/
+│   ├── location.ts             # Coordinate, TrackingMode, LocationStatus
+│   ├── report.ts               # CivicReport, Category, Severity
+│   └── components.ts           # Props contract UI components
+└── utils/
+    ├── haversine.ts            # Validasi koordinat & kalkulasi jarak garis lurus
+    └── formatDistance.ts       # Formatter jarak ramah pengguna (m / km)
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+---
 
-### Other setup steps
+## 2. Kontrak API & Pembagian Peran
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### Anggota 1: Naufal (Lead System Architect & Security Engineer)
+- **Tanggung Jawab:** Audit arsitektur, perancangan kontrak TypeScript, validasi keamanan LBS, konfigurasi adaptive interval, orkestrasi integrasi screen, serta Architect's Audit Protocol checklist.
+- **Output:** `src/types/`, `src/constants/`, arsitektur `useLocationTracking`, integrasi `src/app/index.tsx`, dokumentasi arsitektur.
 
-## Learn more
+### Anggota 2: Syahril (UI/UX & Map Presentation Engineer)
+- **Tanggung Jawab:** Komponen UI peta, kartu ringkasan laporan terpilih, kontrol peta, dan styling interaktif dengan penanganan Safe Area.
+- **Output:** `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
 
-To learn more about developing your project with Expo, look at the following resources:
+### Anggota 3: Robi (Hardware Integration & Spatial Math Engineer)
+- **Tanggung Jawab:** Integrasi hardware sensor `expo-location` dan `react-native-maps`, implementasi lifecycle watcher dan cleanup, serta kalkulasi jarak Haversine.
+- **Output:** `src/hooks/useLocationTracking.ts`, `src/utils/haversine.ts`, `src/utils/formatDistance.ts`.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## 3. Protokol Keamanan & Kualitas (Mobile Security Engineering)
 
-Join our community of developers creating universal apps.
+1. **Foreground Permission Only:** Aplikasi hanya meminta izin `requestForegroundPermissionsAsync`. Tidak ada izin background location yang diminta.
+2. **Zero Coordinate Persistence:** Koordinat pengguna bersifat sementara (*in-memory*) dan tidak pernah disimpan ke `AsyncStorage`, `SQLite`, atau storage persisten lokal.
+3. **Graceful Fallback:** Jika izin ditolak atau GPS nonaktif, `MapView` tetap dapat dibuka dengan wilayah demonstrasi aman (`DEFAULT_FALLBACK_REGION`) dan pengguna tetap dapat memeriksa laporan simulasi.
+4. **Leak-Proof Watcher Cleanup:** Setiap pemanggilan `Location.watchPositionAsync` dikelola dengan cleanup `subscription.remove()` saat unmount maupun saat pergantian mode interval untuk mencegah *memory leak* dan *battery drain*.
+5. **No Credential Exposure:** Tidak ada API key atau kredensial yang di-commit ke source control.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## 4. Cara Menjalankan & Memverifikasi
+
+### Menjalankan Server Expo:
+```bash
+npx expo start
+```
+- Buka di Expo Go pada perangkat fisik Android atau Emulator Android.
+
+### Menjalankan Typecheck:
+```bash
+npx tsc --noEmit
+```
+
+### Menjalankan Linter:
+```bash
+npx expo lint
+```
+
+### Menjalankan Pengujian Unit Spasial Haversine:
+```bash
+node scripts/test-haversine.mjs
+```
