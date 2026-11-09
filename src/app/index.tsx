@@ -1,12 +1,12 @@
 /**
  * Civic Pulse - Modul LBS
  * Screen: Map Screen (Interactive Mapping Engine & LBS Integration)
- * Role: Anggota 1 (Lead System Architect & Security Engineer)
+ * Role: Anggota 1 (System Architect) & Anggota 2 (Lead Frontend & Performance Specialist)
  *
- * Integrasi Modul:
- * - Architecture & Contracts: Anggota 1 (Naufal)
- * - UI Components & Presentation: Anggota 2 (Syahril)
- * - LBS Hardware Hook & Spatial Utility: Anggota 3 (Robi)
+ * Integrasi Kolaboratif Milestone 1:
+ * - Arsitektur, Types & Kontrak: Anggota 1 (Naufal)
+ * - Komponen UI, Interaktivitas, Safe Area & Performa: Anggota 2 (Syahril)
+ * - LBS Hook, Watcher & Formulasi Haversine: Anggota 3 (Robi)
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
@@ -35,15 +35,16 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
 
-  // Mode pelacakan adaptif (low: 50m, balanced: 20m, high: 5m)
+  // Mode interval adaptif (low: 50m, balanced: 20m, high: 5m)
   const [trackingMode, setTrackingMode] = useState<TrackingMode>(DEFAULT_TRACKING_MODE);
 
-  // Laporan yang sedang dipilih untuk melihat detail & jarak
+  // Laporan yang sedang dipilih untuk melihat detail & jarak Haversine
   const [selectedReport, setSelectedReport] = useState<CivicReport | null>(null);
 
-  // Hook LBS: Mengelola lifecycle lokasi, foreground permission, & watcher
+  // Hook LBS: Mengelola lifecycle lokasi, permission foreground, watcher & error
   const {
     location: userLocation,
+    accuracy: userAccuracy,
     status: locationStatus,
     error: locationError,
     permissionGranted,
@@ -53,7 +54,8 @@ export default function MapScreen() {
     mode: trackingMode,
   });
 
-  // Flag agar kamera hanya auto-center SEKALI saat lokasi pertama kali diperoleh
+  // Flag proteksi: kamera hanya auto-center SEKALI saat GPS pertama kali terkunci
+  // untuk mencegah gangguan saat pengguna sedang melakukan pan/zoom bebas di peta
   const hasAutoCenteredRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export default function MapScreen() {
   }, [userLocation, refreshLocation]);
 
   /**
-   * Handler pemilihan marker laporan
+   * Handler pemilihan marker laporan simulasi
    */
   const handleSelectReport = useCallback((report: CivicReport) => {
     setSelectedReport(report);
@@ -105,7 +107,23 @@ export default function MapScreen() {
   }, []);
 
   /**
-   * Kalkulasi jarak garis lurus Haversine dari lokasi pengguna ke laporan terpilih
+   * Handler pemusatan kamera ke marker laporan yang sedang aktif
+   */
+  const handleFocusReport = useCallback((report: CivicReport) => {
+    mapRef.current?.animateToRegion(
+      {
+        latitude: report.coordinate.latitude,
+        longitude: report.coordinate.longitude,
+        latitudeDelta: MAP_CONFIG.initialZoomDelta,
+        longitudeDelta: MAP_CONFIG.initialZoomDelta,
+      },
+      MAP_CONFIG.recenterAnimationDurationMs
+    );
+  }, []);
+
+  /**
+   * Kalkulasi jarak garis lurus Haversine dari lokasi pengguna ke laporan terpilih.
+   * Dimemoize untuk menghindari perhitungan ulang selama koordinat stabil.
    */
   const formattedDistance = useMemo(() => {
     if (!selectedReport || !userLocation) {
@@ -115,23 +133,30 @@ export default function MapScreen() {
     return formatDistance(distanceMeters);
   }, [userLocation, selectedReport]);
 
+  const topInsetPadding = Math.max(insets.top, 12);
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Peta Interaktif & Marker */}
+      {/* Peta Interaktif & Custom Markers (Lapisan Dasar) */}
       <CivicMap
         mapRef={mapRef}
         region={DEFAULT_FALLBACK_REGION}
         userLocation={userLocation}
+        accuracy={userAccuracy}
+        trackingMode={trackingMode}
         reports={SAMPLE_CIVIC_REPORTS}
         selectedReportId={selectedReport?.id ?? null}
         onSelectReport={handleSelectReport}
         onMapPress={handleMapPress}
       />
 
-      {/* Kontrol Peta (Mode Interval & Tombol Recenter) */}
-      <View style={{ paddingTop: insets.top }}>
+      {/* Top Floating Overlay: Kontrol Peta & Banner Status */}
+      <View
+        style={[styles.topOverlayContainer, { paddingTop: topInsetPadding }]}
+        pointerEvents="box-none"
+      >
         <MapControls
           mode={trackingMode}
           onModeChange={setTrackingMode}
@@ -139,7 +164,6 @@ export default function MapScreen() {
           isRecenterDisabled={!userLocation && locationStatus === "loading"}
         />
 
-        {/* Status & Error Banner */}
         <LocationStatusBanner
           status={locationStatus}
           error={locationError}
@@ -148,13 +172,15 @@ export default function MapScreen() {
         />
       </View>
 
-      {/* Kartu Detail Laporan & Kalkulasi Jarak Haversine */}
+      {/* Bottom Floating Card: Detail Laporan Terpilih & Jarak Haversine */}
       {selectedReport && (
         <SelectedReportCard
           report={selectedReport}
           userLocation={userLocation}
           distanceFormatted={formattedDistance}
-          onClose={() => setSelectedReport(null)}
+          onClose={handleMapPress}
+          onFocusReport={handleFocusReport}
+          insets={insets}
         />
       )}
     </View>
@@ -165,5 +191,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+  },
+  topOverlayContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
 });

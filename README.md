@@ -46,8 +46,8 @@ src/
 - **Tanggung Jawab:** Audit arsitektur, perancangan kontrak TypeScript, validasi keamanan LBS, konfigurasi adaptive interval, orkestrasi integrasi screen, serta Architect's Audit Protocol checklist.
 - **Output:** `src/types/`, `src/constants/`, arsitektur `useLocationTracking`, integrasi `src/app/index.tsx`, dokumentasi arsitektur.
 
-### Anggota 2: Syahril (UI/UX & Map Presentation Engineer)
-- **Tanggung Jawab:** Komponen UI peta, kartu ringkasan laporan terpilih, kontrol peta, dan styling interaktif dengan penanganan Safe Area.
+### Anggota 2: Syahril (Lead Frontend & Performance Specialist)
+- **Tanggung Jawab:** Komponen UI peta deklaratif, optimasi rendering Native Map (`tracksViewChanges`), memoization (`React.memo`, `useMemo`, `useCallback`), kartu detail laporan interaktif, kontrol interval, banner status, penanganan Safe Area dinamis, dan aksesibilitas (WCAG AA/AAA).
 - **Output:** `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
 
 ### Anggota 3: Robi (Hardware Integration & Spatial Math Engineer)

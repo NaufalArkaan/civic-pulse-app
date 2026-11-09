@@ -1,9 +1,11 @@
 /**
  * Civic Pulse - Modul LBS
  * Architectural Contracts: Component Props for UI Layer (Anggota 2 - Syahril)
- * Role: Anggota 1 (Lead System Architect & Security Engineer)
+ * Role: Anggota 1 (Lead System Architect) & Anggota 2 (Lead Frontend & Performance Specialist)
  */
 
+import React from "react";
+import { EdgeInsets } from "react-native-safe-area-context";
 import { Coordinate, LocationStatus, MapRegion, TrackingMode } from "./location";
 import { CivicReport } from "./report";
 
@@ -15,6 +17,8 @@ export type CivicMapProps = {
   onSelectReport: (report: CivicReport) => void;
   onMapPress?: () => void;
   mapRef: React.RefObject<any>;
+  trackingMode?: TrackingMode;
+  accuracy?: number | null;
 };
 
 export type UserMarkerProps = {
@@ -34,6 +38,8 @@ export type SelectedReportCardProps = {
   userLocation: Coordinate | null;
   distanceFormatted: string;
   onClose: () => void;
+  onFocusReport?: (report: CivicReport) => void;
+  insets?: EdgeInsets;
 };
 
 export type MapControlsProps = {
@@ -49,4 +55,5 @@ export type LocationStatusBannerProps = {
   permissionGranted: boolean;
   onRetry: () => void;
 };
+
 
