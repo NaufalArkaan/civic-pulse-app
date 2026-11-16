@@ -1,16 +1,16 @@
 /**
  * Civic Pulse - Pertemuan 10
  * Hook: useDocumentVault
- * Role: Anggota 1 & Anggota 3 (Robi) Integration Baseline
+ * Role: Anggota 3 (Lead Hardware & Spatial/Network Engineer) & Anggota 1 (Lead System Architect)
  *
  * Mengelola state berkas Document Vault di Scoped Storage,
- * loading state, error handling, serta integrasi picker dokumen.
+ * loading state, error handling, pencegahan double-tap import, serta integrasi picker dokumen.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
 import * as DocumentPicker from "expo-document-picker";
-import { VaultFile, VaultFileCategory } from "../types/vault";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { documentVault } from "../services/files/documentVault";
+import { VaultFile, VaultFileCategory } from "../types/vault";
 
 export function useDocumentVault() {
   const [files, setFiles] = useState<VaultFile[]>([]);
@@ -19,6 +19,7 @@ export function useDocumentVault() {
   const [isImporting, setIsImporting] = useState<boolean>(false);
 
   const isMountedRef = useRef<boolean>(true);
+  const isProcessingRef = useRef<boolean>(false);
 
   const refreshFiles = useCallback(async () => {
     if (!isMountedRef.current) return;
@@ -63,8 +64,12 @@ export function useDocumentVault() {
 
   /**
    * Mengimpor dokumen dari perangkat pengguna menggunakan System Document Picker
+   * Dilengkapi guard isProcessingRef untuk mencegah race condition double import
    */
   const importDocument = useCallback(async (): Promise<boolean> => {
+    if (isProcessingRef.current) return false;
+    isProcessingRef.current = true;
+
     try {
       setIsImporting(true);
       setError(null);
@@ -74,8 +79,11 @@ export function useDocumentVault() {
         copyToCacheDirectory: true,
       });
 
-      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
-        setIsImporting(false);
+      if (
+        pickerResult.canceled ||
+        !pickerResult.assets ||
+        pickerResult.assets.length === 0
+      ) {
         return false;
       }
 
@@ -83,26 +91,28 @@ export function useDocumentVault() {
       const res = await documentVault.importFile(
         asset.uri,
         asset.name,
-        asset.mimeType
+        asset.mimeType,
       );
 
       if (!isMountedRef.current) return false;
 
       if (!res.success) {
         setError(res.error);
-        setIsImporting(false);
         return false;
       }
 
       await refreshFiles();
-      setIsImporting(false);
       return true;
     } catch (err: any) {
       if (isMountedRef.current) {
         setError(err?.message || "Terjadi kesalahan saat memilih dokumen.");
-        setIsImporting(false);
       }
       return false;
+    } finally {
+      isProcessingRef.current = false;
+      if (isMountedRef.current) {
+        setIsImporting(false);
+      }
     }
   }, [refreshFiles]);
 
@@ -110,33 +120,46 @@ export function useDocumentVault() {
    * Menambahkan dokumen demonstrasi simulasi secara offline
    */
   const addDemoReport = useCallback(
-    async (title: string, content: string, category: VaultFileCategory = "document"): Promise<boolean> => {
+    async (
+      title: string,
+      content: string,
+      category: VaultFileCategory = "document",
+    ): Promise<boolean> => {
+      if (isProcessingRef.current) return false;
+      isProcessingRef.current = true;
+
       try {
         setIsImporting(true);
         setError(null);
 
-        const res = await documentVault.createDemoDocument(title, content, category);
+        const res = await documentVault.createDemoDocument(
+          title,
+          content,
+          category,
+        );
 
         if (!isMountedRef.current) return false;
 
         if (!res.success) {
           setError(res.error);
-          setIsImporting(false);
           return false;
         }
 
         await refreshFiles();
-        setIsImporting(false);
         return true;
       } catch (err: any) {
         if (isMountedRef.current) {
           setError(err?.message || "Gagal membuat dokumen demonstrasi.");
-          setIsImporting(false);
         }
         return false;
+      } finally {
+        isProcessingRef.current = false;
+        if (isMountedRef.current) {
+          setIsImporting(false);
+        }
       }
     },
-    [refreshFiles]
+    [refreshFiles],
   );
 
   /**
@@ -164,8 +187,28 @@ export function useDocumentVault() {
         return false;
       }
     },
-    [refreshFiles]
+    [refreshFiles],
   );
+
+  /**
+   * Mengambil detail berkas tertentu
+   */
+  const getFile = useCallback(async (id: string): Promise<VaultFile | null> => {
+    const res = await documentVault.getFile(id);
+    return res.success && res.data ? res.data : null;
+  }, []);
+
+  /**
+   * Membersihkan berkas orphan yang tidak terdaftar di metadata
+   */
+  const cleanupOrphans = useCallback(async (): Promise<number> => {
+    const res = await documentVault.cleanupOrphanFiles();
+    if (res.success && res.data && res.data > 0) {
+      await refreshFiles();
+      return res.data;
+    }
+    return 0;
+  }, [refreshFiles]);
 
   return {
     files,
@@ -176,5 +219,7 @@ export function useDocumentVault() {
     importDocument,
     addDemoReport,
     deleteFile,
+    getFile,
+    cleanupOrphans,
   };
 }

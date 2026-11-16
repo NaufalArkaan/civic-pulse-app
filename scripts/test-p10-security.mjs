@@ -1,68 +1,15 @@
 import assert from "node:assert";
 import test from "node:test";
-
-// Validasi File & Sanitasi Path Traversal
-function sanitizeFileName(rawName) {
-  if (!rawName) return `file_${Date.now()}`;
-  const clean = rawName
-    .replace(/^.*[\\/]/, "")
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/\.{2,}/g, ".");
-  return clean || `file_${Date.now()}`;
-}
-
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt"];
-const ALLOWED_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-  "text/plain",
-];
-
-function isAllowedFile(fileName, mimeType) {
-  const lowerName = fileName.toLowerCase();
-  const hasValidExt = ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
-  if (mimeType) {
-    const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase());
-    return hasValidExt || isMimeAllowed;
-  }
-  return hasValidExt;
-}
-
-function inferFileCategory(fileName, mimeType) {
-  const lower = fileName.toLowerCase();
-  if (
-    lower.endsWith(".jpg") ||
-    lower.endsWith(".jpeg") ||
-    lower.endsWith(".png") ||
-    lower.endsWith(".webp") ||
-    mimeType?.startsWith("image/")
-  ) {
-    return "photo";
-  }
-  if (lower.endsWith(".pdf") || lower.endsWith(".txt") || mimeType?.includes("pdf")) {
-    return "document";
-  }
-  return "other";
-}
-
-function maskNIK(nik) {
-  if (!nik) return "-";
-  if (nik.length < 10) return "******";
-  const start = nik.slice(0, 6);
-  const end = nik.slice(-4);
-  const maskedMiddle = "*".repeat(Math.max(4, nik.length - 10));
-  return `${start}${maskedMiddle}${end}`;
-}
-
-function maskToken(token) {
-  if (!token) return "-";
-  if (token.length < 12) return "********";
-  const prefix = token.slice(0, 10);
-  const suffix = token.slice(-4);
-  return `${prefix}****${suffix}`;
-}
+import {
+  sanitizeFileName,
+  isAllowedFile,
+  inferFileCategory,
+  validateFileSize,
+  validateFileEntry,
+  maskNIK,
+  maskToken,
+  MAX_FILE_SIZE_BYTES,
+} from "../src/utils/fileValidation.ts";
 
 const MAX_SECURE_PAYLOAD_BYTES = 2048;
 function validateSecurePayload(value) {
@@ -76,33 +23,79 @@ function validateSecurePayload(value) {
   return { valid: true };
 }
 
-test("Security: Sanitize file name strips Path Traversal attempts", () => {
+test("Security: Sanitize file name strips Path Traversal attempts and dangerous patterns", () => {
   assert.strictEqual(sanitizeFileName("../../../etc/passwd"), "passwd");
   assert.strictEqual(sanitizeFileName("..\\..\\windows\\system32\\cmd.exe"), "cmd.exe");
   assert.strictEqual(sanitizeFileName("laporan..retakan.pdf"), "laporan.retakan.pdf");
   assert.strictEqual(sanitizeFileName("foto gempa (malang) #1.jpg"), "foto_gempa__malang___1.jpg");
+
+  // Empty or dot-only edge cases
+  const emptyRes = sanitizeFileName("");
+  assert.ok(emptyRes.startsWith("file_"));
+
+  const dotRes = sanitizeFileName("..");
+  assert.ok(dotRes.startsWith("file_"));
+
+  const singleDotRes = sanitizeFileName(".");
+  assert.ok(singleDotRes.startsWith("file_"));
 });
 
 test("Security: File format white-listing accepts valid civic report media", () => {
   assert.strictEqual(isAllowedFile("foto_longsor.jpg", "image/jpeg"), true);
   assert.strictEqual(isAllowedFile("dokumen_mitigasi.pdf", "application/pdf"), true);
   assert.strictEqual(isAllowedFile("catatan_lapangan.txt", "text/plain"), true);
-  // Rejects dangerous executables / scripts
+  assert.strictEqual(isAllowedFile("bukti_retakan.webp", "image/webp"), true);
+
+  // Rejects dangerous executables / scripts / unauthorized formats
   assert.strictEqual(isAllowedFile("malware.exe", "application/x-msdownload"), false);
   assert.strictEqual(isAllowedFile("script.js", "application/javascript"), false);
+  assert.strictEqual(isAllowedFile("exploit.sh", "application/x-sh"), false);
 });
 
 test("Security: Category inference categorizes photos and documents correctly", () => {
   assert.strictEqual(inferFileCategory("foto.png"), "photo");
+  assert.strictEqual(inferFileCategory("foto.jpg"), "photo");
+  assert.strictEqual(inferFileCategory("foto.webp"), "photo");
   assert.strictEqual(inferFileCategory("laporan.pdf"), "document");
+  assert.strictEqual(inferFileCategory("laporan.txt"), "document");
   assert.strictEqual(inferFileCategory("arsip.bin"), "other");
+});
+
+test("Validation: Configurable file size limits and structured entry validation", () => {
+  // Size checks
+  assert.strictEqual(validateFileSize(1024).valid, true);
+  assert.strictEqual(validateFileSize(MAX_FILE_SIZE_BYTES).valid, true);
+  assert.strictEqual(validateFileSize(MAX_FILE_SIZE_BYTES + 1).valid, false);
+  assert.strictEqual(validateFileSize(null).valid, true);
+  assert.strictEqual(validateFileSize(-1).valid, false);
+
+  // Full entry validation: valid case
+  const validDoc = validateFileEntry("bukti_longsor.jpg", "image/jpeg", 500 * 1024);
+  assert.strictEqual(validDoc.valid, true);
+  assert.strictEqual(validDoc.category, "photo");
+  assert.strictEqual(validDoc.sanitizedName, "bukti_longsor.jpg");
+
+  // Full entry validation: oversize file
+  const oversizeDoc = validateFileEntry("laporan_jumbo.pdf", "application/pdf", 15 * 1024 * 1024);
+  assert.strictEqual(oversizeDoc.valid, false);
+  assert.ok(oversizeDoc.error?.includes("melebihi batas maksimum"));
+
+  // Full entry validation: unauthorized extension
+  const invalidExt = validateFileEntry("trojan.exe", "application/x-msdownload", 1024);
+  assert.strictEqual(invalidExt.valid, false);
+  assert.ok(invalidExt.error?.includes("tidak didukung"));
 });
 
 test("Privacy: Masking functions properly conceal NIK and Token", () => {
   assert.strictEqual(maskNIK("3573031204010001"), "357303******0001");
   assert.strictEqual(maskNIK(null), "-");
+  assert.strictEqual(maskNIK(undefined), "-");
+  assert.strictEqual(maskNIK("123"), "******");
+
   assert.strictEqual(maskToken("civic_tok_e91b2c3d4e5f6a7b"), "civic_tok_****6a7b");
   assert.strictEqual(maskToken(null), "-");
+  assert.strictEqual(maskToken(undefined), "-");
+  assert.strictEqual(maskToken("short"), "********");
 });
 
 test("Security: SecureStore payload limit guard rejects large base64/media payloads", () => {

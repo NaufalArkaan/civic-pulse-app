@@ -55,9 +55,17 @@ src/
   - `src/components/vault/` (`VaultHeader`, `SecureStoreCard`, `VaultFileItem`, `VaultFileList`, `VaultEmptyState`, `VaultPermissionNotice`, `VaultFilePreviewModal`, `VaultJitModal`).
   - `src/app/vault.tsx` (Screen Document Vault & Scoped Storage).
 
-### Anggota 3: Robi (Hardware Integration & Spatial Math Engineer)
-- **Tanggung Jawab:** Integrasi hardware sensor `expo-location` dan `react-native-maps`, implementasi lifecycle watcher dan cleanup, serta kalkulasi jarak Haversine.
-- **Output:** `src/hooks/useLocationTracking.ts`, `src/utils/haversine.ts`, `src/utils/formatDistance.ts`.
+### Anggota 3: Robi (Lead Hardware & Spatial/Network Engineer)
+- **Tanggung Jawab:**
+  - **P9:** Integrasi hardware sensor `expo-location` dan `react-native-maps`, implementasi lifecycle watcher dan cleanup, serta kalkulasi jarak Haversine.
+  - **P10:** Integrasi Scoped Storage sandbox `expo-file-system` (`documentDirectory`), operasi file privat (import, delete, missing verification, rollback atomic, orphan cleanup), validasi file (size & format), pencegahan double import, serta implementasi hook Just-In-Time Runtime Permission (`useRuntimePermissions`).
+- **Output:**
+  - `src/services/files/documentVault.ts` (Document Vault service & Scoped Storage).
+  - `src/services/permissions/permissionService.ts` (JIT Runtime Permission Orchestrator).
+  - `src/hooks/useRuntimePermissions.ts` (JIT Permission Hook).
+  - `src/hooks/useDocumentVault.ts` (Document Vault Hook & double-tap guard).
+  - `src/utils/fileValidation.ts` (Path traversal sanitizer, format allowlist, size validator).
+  - `scripts/test-p10-security.mjs` (Security, path traversal, validation, and privacy test suite).
 
 ---
 
