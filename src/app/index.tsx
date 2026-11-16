@@ -161,6 +161,16 @@ export default function MapScreen() {
       >
         <View style={styles.topActionRow} pointerEvents="box-none">
           <TouchableOpacity
+            style={styles.reportsPillButton}
+            onPress={() => router.push("/reports" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Buka Daftar Laporan dan Pencarian Real-Time"
+          >
+            <Text style={styles.reportsPillIcon}>⚡</Text>
+            <Text style={styles.reportsPillText}>Real-Time Feed</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.vaultPillButton}
             onPress={() => router.push("/vault" as any)}
             accessibilityRole="button"
@@ -217,6 +227,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: "row",
     justifyContent: "flex-end",
+    gap: 8,
+  },
+  reportsPillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0369A1",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#0284C7",
+  },
+  reportsPillIcon: {
+    fontSize: 13,
+    marginRight: 6,
+  },
+  reportsPillText: {
+    color: "#F0F9FF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   vaultPillButton: {
     flexDirection: "row",
