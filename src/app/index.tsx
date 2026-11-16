@@ -31,11 +31,24 @@ import {
   LocationStatusBanner,
   SelectedReportCard,
 } from "../components/map";
+import { reportSearchService } from "../services/reports/reportSearchService";
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+
+  // Sumber data domain terpadu untuk marker peta (tersinkronisasi dengan feed real-time)
+  const [mapReports, setMapReports] = useState<CivicReport[]>(SAMPLE_CIVIC_REPORTS);
+
+  useEffect(() => {
+    const sub = reportSearchService.searchResults$.subscribe((state) => {
+      if (state.reports && state.reports.length > 0) {
+        setMapReports(state.reports);
+      }
+    });
+    return () => sub.unsubscribe();
+  }, []);
 
   // Mode interval adaptif (low: 50m, balanced: 20m, high: 5m)
   const [trackingMode, setTrackingMode] = useState<TrackingMode>(DEFAULT_TRACKING_MODE);
@@ -148,7 +161,7 @@ export default function MapScreen() {
         userLocation={userLocation}
         accuracy={userAccuracy}
         trackingMode={trackingMode}
-        reports={SAMPLE_CIVIC_REPORTS}
+        reports={mapReports}
         selectedReportId={selectedReport?.id ?? null}
         onSelectReport={handleSelectReport}
         onMapPress={handleMapPress}

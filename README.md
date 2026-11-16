@@ -46,13 +46,16 @@ src/
 - **Tanggung Jawab:** Audit arsitektur, perancangan kontrak TypeScript, validasi keamanan LBS, konfigurasi adaptive interval, orkestrasi integrasi screen, serta Architect's Audit Protocol checklist.
 - **Output:** `src/types/`, `src/constants/`, arsitektur `useLocationTracking`, integrasi `src/app/index.tsx`, dokumentasi arsitektur.
 
-### Anggota 2: Syahril (Lead Frontend & Performance Specialist)
+### Anggota 2: Syahril (Lead Frontend & Reactive UI Specialist)
 - **Tanggung Jawab:**
   - **P9:** Komponen UI peta deklaratif, optimasi rendering Native Map (`tracksViewChanges`), memoization (`React.memo`, `useMemo`, `useCallback`), kartu detail laporan interaktif, kontrol interval, banner status, penanganan Safe Area dinamis, dan aksesibilitas (WCAG AA/AAA).
   - **P10:** Antarmuka Document Vault deklaratif, virtualisasi daftar berkas (`FlatList`), komponen pratinjau dokumen (`VaultFilePreviewModal`), dialog edukasi privasi Just-In-Time (`VaultJitModal`), ringkasan metrik penyimpanan sandbox, masking data sensitif (NIK/Token), konfirmasi penghapusan aman, dan feedback toast sukses.
+  - **P11:** Antarmuka pencarian dan filter reaktif RxJS (`ReportSearchBar`, `ReportFilterBar`), feed laporan tervirtualisasi berbasis `FlatList` (`ReportList`, `ReportItem`), banner status jaringan dan sinkronisasi outbox ramah warga (`ReportSyncBanner`), integrasi screen feed laporan (`src/app/reports.tsx`), sinkronisasi marker peta dengan feed laporan live, serta pencegahan flicker rendering.
 - **Output:**
   - `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
   - `src/components/vault/` (`VaultHeader`, `SecureStoreCard`, `VaultFileItem`, `VaultFileList`, `VaultEmptyState`, `VaultPermissionNotice`, `VaultFilePreviewModal`, `VaultJitModal`).
+  - `src/components/reports/` (`ReportSearchBar`, `ReportFilterBar`, `ReportSyncBanner`, `ReportItem`, `ReportList`).
+  - `src/app/reports.tsx` (Screen Feed Laporan Reaktif & Real-Time).
   - `src/app/vault.tsx` (Screen Document Vault & Scoped Storage).
 
 ### Anggota 3: Robi (Lead Hardware & Spatial/Network Engineer)

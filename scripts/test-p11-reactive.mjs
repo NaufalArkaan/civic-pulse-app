@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import test from "node:test";
 import { Subject, of, throwError } from "rxjs";
-import { debounceTime, distinctUntilChanged, switchMap, catchError, map } from "rxjs/operators";
+import { catchError, distinctUntilChanged, switchMap } from "rxjs/operators";
 
 // 1. Kriteria Pencarian & Komparator
 function normalizeQuery(q) {
@@ -18,7 +18,11 @@ function areSearchCriteriaEqual(a, b) {
 }
 
 test("RxJS: areSearchCriteriaEqual handles whitespace normalization and filters accurately", () => {
-  const c1 = { query: "  jalan   rusak  ", category: "road-damage", status: "all" };
+  const c1 = {
+    query: "  jalan   rusak  ",
+    category: "road-damage",
+    status: "all",
+  };
   const c2 = { query: "jalan rusak", category: "road-damage", status: "all" };
   const c3 = { query: "jalan rusak", category: "flood", status: "all" };
 
@@ -53,11 +57,11 @@ test("RxJS Pipeline: switchMap cancels previous in-flight requests and preserves
       switchMap((criteria) => {
         if (criteria.query === "error-trigger") {
           return throwError(() => new Error("Network error simulation")).pipe(
-            catchError((err) => of({ error: err.message, data: [] }))
+            catchError((err) => of({ error: err.message, data: [] })),
           );
         }
         return of({ error: null, data: [`result-for-${criteria.query}`] });
-      })
+      }),
     )
     .subscribe((res) => results.push(res));
 
@@ -71,9 +75,18 @@ test("RxJS Pipeline: switchMap cancels previous in-flight requests and preserves
   sub.unsubscribe();
 
   assert.strictEqual(results.length, 3);
-  assert.deepStrictEqual(results[0], { error: null, data: ["result-for-pertama"] });
-  assert.deepStrictEqual(results[1], { error: "Network error simulation", data: [] });
-  assert.deepStrictEqual(results[2], { error: null, data: ["result-for-ketiga"] });
+  assert.deepStrictEqual(results[0], {
+    error: null,
+    data: ["result-for-pertama"],
+  });
+  assert.deepStrictEqual(results[1], {
+    error: "Network error simulation",
+    data: [],
+  });
+  assert.deepStrictEqual(results[2], {
+    error: null,
+    data: ["result-for-ketiga"],
+  });
 });
 
 test("Realtime Ordering: Stale timestamp update is rejected to prevent race conditions", () => {
@@ -99,7 +112,10 @@ test("Realtime Ordering: Stale timestamp update is rejected to prevent race cond
   };
 
   function applyUpdate(existing, incoming) {
-    if (new Date(existing.updatedAt).getTime() > new Date(incoming.updatedAt).getTime()) {
+    if (
+      new Date(existing.updatedAt).getTime() >
+      new Date(incoming.updatedAt).getTime()
+    ) {
       return existing; // Tolak stale update
     }
     return incoming;
