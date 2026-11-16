@@ -47,8 +47,13 @@ src/
 - **Output:** `src/types/`, `src/constants/`, arsitektur `useLocationTracking`, integrasi `src/app/index.tsx`, dokumentasi arsitektur.
 
 ### Anggota 2: Syahril (Lead Frontend & Performance Specialist)
-- **Tanggung Jawab:** Komponen UI peta deklaratif, optimasi rendering Native Map (`tracksViewChanges`), memoization (`React.memo`, `useMemo`, `useCallback`), kartu detail laporan interaktif, kontrol interval, banner status, penanganan Safe Area dinamis, dan aksesibilitas (WCAG AA/AAA).
-- **Output:** `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
+- **Tanggung Jawab:**
+  - **P9:** Komponen UI peta deklaratif, optimasi rendering Native Map (`tracksViewChanges`), memoization (`React.memo`, `useMemo`, `useCallback`), kartu detail laporan interaktif, kontrol interval, banner status, penanganan Safe Area dinamis, dan aksesibilitas (WCAG AA/AAA).
+  - **P10:** Antarmuka Document Vault deklaratif, virtualisasi daftar berkas (`FlatList`), komponen pratinjau dokumen (`VaultFilePreviewModal`), dialog edukasi privasi Just-In-Time (`VaultJitModal`), ringkasan metrik penyimpanan sandbox, masking data sensitif (NIK/Token), konfirmasi penghapusan aman, dan feedback toast sukses.
+- **Output:**
+  - `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
+  - `src/components/vault/` (`VaultHeader`, `SecureStoreCard`, `VaultFileItem`, `VaultFileList`, `VaultEmptyState`, `VaultPermissionNotice`, `VaultFilePreviewModal`, `VaultJitModal`).
+  - `src/app/vault.tsx` (Screen Document Vault & Scoped Storage).
 
 ### Anggota 3: Robi (Hardware Integration & Spatial Math Engineer)
 - **Tanggung Jawab:** Integrasi hardware sensor `expo-location` dan `react-native-maps`, implementasi lifecycle watcher dan cleanup, serta kalkulasi jarak Haversine.

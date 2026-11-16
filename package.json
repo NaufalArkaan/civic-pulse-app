@@ -45,7 +45,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --experimental-strip-types scripts/test-haversine.mjs"
+    "test": "node --experimental-strip-types scripts/test-haversine.mjs && node --experimental-strip-types scripts/test-p10-security.mjs"
   },
   "private": true
 }
