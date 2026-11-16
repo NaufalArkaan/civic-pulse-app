@@ -93,12 +93,32 @@ node --experimental-strip-types scripts/test-haversine.mjs
 
 ---
 
-## 5. Catatan Debugging Kompatibilitas Android & iOS
+## 6. Milestone 2 (Pertemuan 10) — Offline-First Architecture & Secure Storage Integration
 
-Pada saat pengujian awal di perangkat Android, ditemukan runtime error fatal:
-```text
-Error while updating property 'accessibilityRole' of a view managed by: RCTView
-Invalid accessibility role value: region
+Milestone 2 mengimplementasikan fondasi pengelolaan data lokal aman (Sub-CPMK 8) dengan integrasi:
+1. `expo-secure-store` untuk kredensial, token, dan NIK dummy (Hardware-Backed Keystore/Keychain).
+2. `expo-file-system` (`documentDirectory`) untuk Document Vault privat berbasis Scoped Storage.
+3. Just-In-Time (JIT) Runtime Permissions untuk kamera, lokasi, dan media picker.
+
+### 6.1 Matriks Klasifikasi Data
+
+| Jenis Data | Lokasi Penyimpanan | Mekanisme Keamanan |
+| :--- | :--- | :--- |
+| **Token, NIK Dummy, Kredensial** | `expo-secure-store` | Dienkripsi via Android Keystore / iOS Keychain. Nilai sensitif tidak pernah dicatat ke log konsol. Payload dibatasi maksimal 2 KB. |
+| **Foto Kerusakan, Dokumen Mitigasi (PDF/TXT)** | `expo-file-system` (`documentDirectory/civic-pulse/vault/`) | Disimpan di sandbox privat aplikasi. Diisolasi oleh kernel OS Android/iOS (Scoped Storage). *Bukan enkripsi otomatis.* |
+| **Metadata Berkas (ID, nama, ukuran, MIME, timestamp)** | Manifest JSON lokal (`metadata.json`) | Disimpan di subdirektori privat. Memiliki verifikasi status *missing* jika berkas fisik dihapus/desinkronisasi. |
+| **State Sementara UI** | React Local State (`useState`, `useRef`) | Disimpan dalam memori volatil selama komponen aktif. Dibersihkan saat unmount. |
+
+### 6.2 Pengujian Unit Keamanan & Sanitasi Berkas
+
+Jalankan test suite keamanan Pertemuan 10:
+```bash
+node scripts/test-p10-security.mjs
 ```
-- **Penyebab:** Properti W3C ARIA web `accessibilityRole="region"` digunakan pada container `SelectedReportCard.tsx`. Pada runtime native Android (React Native core `ReactAccessibilityDelegate.kt`), peran `"region"` tidak terdaftar dalam enum native accessibility role Android dan menyebabkan `IllegalArgumentException`. Pada iOS, nilai ini diabaikan sehingga tidak menyebabkan crash pada iPhone.
-- **Solusi:** Nilai `accessibilityRole` diperbarui menjadi `"summary"` yang merupakan role semantik resmi dan terdaftar baik di Android (`android.view.View` dengan `roleDescription = summary`) maupun di iOS (`UIAccessibilityTraitSummaryElement`). Crash berhasil terselesaikan secara tuntas tanpa merusak kompatibilitas iOS maupun aksesibilitas TalkBack/VoiceOver.
+Verifikasi mencakup:
+- Pencegahan Path Traversal (`../../etc/passwd` -> `passwd`).
+- Whitelisting format berkas (`.jpg`, `.jpeg`, `.png`, `.webp`, `.pdf`, `.txt`).
+- Inferensi kategori berkas (`photo`, `document`, `other`).
+- Masking NIK (`3573031204010001` -> `357303******0001`) dan Token (`civic_tok_****6a7b`).
+- Payload size guard pada SecureStore (> 2 KB ditolak).
+

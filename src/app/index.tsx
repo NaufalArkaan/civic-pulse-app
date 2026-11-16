@@ -10,10 +10,11 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import MapView from "react-native-maps";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { TrackingMode } from "../types/location";
 import { CivicReport } from "../types/report";
@@ -32,6 +33,7 @@ import {
 } from "../components/map";
 
 export default function MapScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
 
@@ -157,6 +159,18 @@ export default function MapScreen() {
         style={[styles.topOverlayContainer, { paddingTop: topInsetPadding }]}
         pointerEvents="box-none"
       >
+        <View style={styles.topActionRow} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.vaultPillButton}
+            onPress={() => router.push("/vault" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Buka Document Vault dan Secure Storage"
+          >
+            <Text style={styles.vaultPillIcon}>🔐</Text>
+            <Text style={styles.vaultPillText}>Document Vault</Text>
+          </TouchableOpacity>
+        </View>
+
         <MapControls
           mode={trackingMode}
           onModeChange={setTrackingMode}
@@ -197,5 +211,35 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+  },
+  topActionRow: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  vaultPillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  vaultPillIcon: {
+    fontSize: 13,
+    marginRight: 6,
+  },
+  vaultPillText: {
+    color: "#F8FAFC",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });

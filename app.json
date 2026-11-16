@@ -42,7 +42,8 @@
         {
           "locationWhenInUsePermission": "Civic Pulse membutuhkan izin lokasi foreground untuk mendeteksi posisi Anda terhadap laporan infrastruktur sekitar."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
