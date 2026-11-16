@@ -31,11 +31,24 @@ import {
   LocationStatusBanner,
   SelectedReportCard,
 } from "../components/map";
+import { reportSearchService } from "../services/reports/reportSearchService";
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+
+  // Sumber data domain terpadu untuk marker peta (tersinkronisasi dengan feed real-time)
+  const [mapReports, setMapReports] = useState<CivicReport[]>(SAMPLE_CIVIC_REPORTS);
+
+  useEffect(() => {
+    const sub = reportSearchService.searchResults$.subscribe((state) => {
+      if (state.reports && state.reports.length > 0) {
+        setMapReports(state.reports);
+      }
+    });
+    return () => sub.unsubscribe();
+  }, []);
 
   // Mode interval adaptif (low: 50m, balanced: 20m, high: 5m)
   const [trackingMode, setTrackingMode] = useState<TrackingMode>(DEFAULT_TRACKING_MODE);
@@ -148,7 +161,7 @@ export default function MapScreen() {
         userLocation={userLocation}
         accuracy={userAccuracy}
         trackingMode={trackingMode}
-        reports={SAMPLE_CIVIC_REPORTS}
+        reports={mapReports}
         selectedReportId={selectedReport?.id ?? null}
         onSelectReport={handleSelectReport}
         onMapPress={handleMapPress}
@@ -160,6 +173,16 @@ export default function MapScreen() {
         pointerEvents="box-none"
       >
         <View style={styles.topActionRow} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.reportsPillButton}
+            onPress={() => router.push("/reports" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Buka Daftar Laporan dan Pencarian Real-Time"
+          >
+            <Text style={styles.reportsPillIcon}>⚡</Text>
+            <Text style={styles.reportsPillText}>Real-Time Feed</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.vaultPillButton}
             onPress={() => router.push("/vault" as any)}
@@ -217,6 +240,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: "row",
     justifyContent: "flex-end",
+    gap: 8,
+  },
+  reportsPillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0369A1",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#0284C7",
+  },
+  reportsPillIcon: {
+    fontSize: 13,
+    marginRight: 6,
+  },
+  reportsPillText: {
+    color: "#F0F9FF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   vaultPillButton: {
     flexDirection: "row",

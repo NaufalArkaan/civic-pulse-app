@@ -1,3 +1,3 @@
 export * from "./useLocationTracking";
 export * from "./useDocumentVault";
-export * from "./useRuntimePermissions";
+export * from "./useReportSearch";

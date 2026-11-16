@@ -12,7 +12,7 @@
  * 5. Sanitasi Payload: Menolak penyimpanan token / NIK / kredensial dalam payload outbox.
  */
 
-import type { IOutboxRepository, OutboxOperation, OutboxStatus } from "../../types/sync";
+import type { EnqueueOperationInput, IOutboxRepository, OutboxOperation, OutboxStatus } from "../../types/sync";
 import { DatabaseManager, databaseManager } from "../database/database";
 import {
   BASE_BACKOFF_DELAY_MS,
@@ -54,27 +54,31 @@ export class OutboxRepository implements IOutboxRepository {
     this.dbManager = dbManager;
   }
 
-  async enqueueOperation(
-    operation: Omit<OutboxOperation, "operation_id" | "retry_count" | "status" | "last_error" | "created_at" | "next_attempt_at"> & {
-      operation_id?: string;
-    }
-  ): Promise<OutboxOperation> {
+  async enqueueOperation(operation: EnqueueOperationInput): Promise<OutboxOperation> {
     const db = await this.dbManager.getDatabase();
     const now = new Date().toISOString();
     const operation_id = operation.operation_id || generateUUID();
     const sanitizedPayload = sanitizeOutboxPayload(operation.payload);
 
+    const opType = operation.operation_type || operation.type || "CREATE_REPORT";
     const fullOp: OutboxOperation = {
       operation_id,
+      operationId: operation_id,
+      idempotencyKey: operation.idempotencyKey || operation_id,
       entity_type: operation.entity_type,
       entity_id: operation.entity_id,
-      operation_type: operation.operation_type,
+      operation_type: opType,
+      type: opType,
       payload: sanitizedPayload,
       created_at: now,
+      createdAt: now,
       retry_count: 0,
+      retryCount: 0,
       next_attempt_at: now,
       status: "pending",
       last_error: null,
+      error: null,
+      updatedAt: now,
     };
 
     await db.runAsync(
@@ -204,17 +208,25 @@ export class OutboxRepository implements IOutboxRepository {
   }
 
   private mapRowToOperation(row: SQLiteOutboxRow): OutboxOperation {
+    const opType = (row.operation_type || "CREATE_REPORT") as OutboxOperation["operation_type"];
     return {
       operation_id: row.operation_id,
+      operationId: row.operation_id,
+      idempotencyKey: row.operation_id,
       entity_type: row.entity_type as "report",
       entity_id: row.entity_id,
-      operation_type: row.operation_type as OutboxOperation["operation_type"],
+      operation_type: opType,
+      type: opType,
       payload: row.payload,
       created_at: row.created_at,
+      createdAt: row.created_at,
       retry_count: row.retry_count,
+      retryCount: row.retry_count,
       next_attempt_at: row.next_attempt_at,
       status: row.status as OutboxStatus,
       last_error: row.last_error,
+      error: row.last_error,
+      updatedAt: row.created_at,
     };
   }
 }

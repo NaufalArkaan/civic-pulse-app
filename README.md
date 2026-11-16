@@ -46,13 +46,16 @@ src/
 - **Tanggung Jawab:** Audit arsitektur, perancangan kontrak TypeScript, validasi keamanan LBS, konfigurasi adaptive interval, orkestrasi integrasi screen, serta Architect's Audit Protocol checklist.
 - **Output:** `src/types/`, `src/constants/`, arsitektur `useLocationTracking`, integrasi `src/app/index.tsx`, dokumentasi arsitektur.
 
-### Anggota 2: Syahril (Lead Frontend & Performance Specialist)
+### Anggota 2: Syahril (Lead Frontend & Reactive UI Specialist)
 - **Tanggung Jawab:**
   - **P9:** Komponen UI peta deklaratif, optimasi rendering Native Map (`tracksViewChanges`), memoization (`React.memo`, `useMemo`, `useCallback`), kartu detail laporan interaktif, kontrol interval, banner status, penanganan Safe Area dinamis, dan aksesibilitas (WCAG AA/AAA).
   - **P10:** Antarmuka Document Vault deklaratif, virtualisasi daftar berkas (`FlatList`), komponen pratinjau dokumen (`VaultFilePreviewModal`), dialog edukasi privasi Just-In-Time (`VaultJitModal`), ringkasan metrik penyimpanan sandbox, masking data sensitif (NIK/Token), konfirmasi penghapusan aman, dan feedback toast sukses.
+  - **P11:** Antarmuka pencarian dan filter reaktif RxJS (`ReportSearchBar`, `ReportFilterBar`), feed laporan tervirtualisasi berbasis `FlatList` (`ReportList`, `ReportItem`), banner status jaringan dan sinkronisasi outbox ramah warga (`ReportSyncBanner`), integrasi screen feed laporan (`src/app/reports.tsx`), sinkronisasi marker peta dengan feed laporan live, serta pencegahan flicker rendering.
 - **Output:**
   - `src/components/map/` (`CivicMap`, `ReportMarker`, `UserLocationMarker`, `SelectedReportCard`, `MapControls`, `LocationStatusBanner`).
   - `src/components/vault/` (`VaultHeader`, `SecureStoreCard`, `VaultFileItem`, `VaultFileList`, `VaultEmptyState`, `VaultPermissionNotice`, `VaultFilePreviewModal`, `VaultJitModal`).
+  - `src/components/reports/` (`ReportSearchBar`, `ReportFilterBar`, `ReportSyncBanner`, `ReportItem`, `ReportList`).
+  - `src/app/reports.tsx` (Screen Feed Laporan Reaktif & Real-Time).
   - `src/app/vault.tsx` (Screen Document Vault & Scoped Storage).
 
 ### Anggota 3: Robi (Lead Hardware & Spatial/Network Engineer)
@@ -134,4 +137,30 @@ Verifikasi mencakup:
 - Inferensi kategori berkas (`photo`, `document`, `other`).
 - Masking NIK (`3573031204010001` -> `357303******0001`) dan Token (`civic_tok_****6a7b`).
 - Payload size guard pada SecureStore (> 2 KB ditolak).
+
+---
+
+## 7. Milestone 3 (Pertemuan 11) — Real-Time Data Pipeline & Background Task Processing
+
+Milestone 3 mengimplementasikan alur data reaktif tingkat lanjut menggunakan **RxJS** dan manajemen sinkronisasi offline (Sub-CPMK 9):
+
+### 7.1 Komponen Inti Pertemuan 11
+1. **RxJS Search & Filter Pipeline:** Menggunakan `debounceTime(300ms)`, `distinctUntilChanged(areSearchCriteriaEqual)`, dan `switchMap` untuk membatalkan pencarian lama dan mencegah *race condition*.
+2. **Realtime Provider Architecture:** Mengabstraksikan aliran data event melalui `IRealtimeProvider`. Dilengkapi dengan `MockRealtimeProvider` berlabel jelas `[Simulasi Realtime / Development Provider]` dan `SupabaseRealtimeProvider` yang siap beralih ketika kredensial backend disuplai.
+3. **Local Structured Cache & Outbox (SQLite):** Menggunakan `expo-sqlite` untuk menyimpan snapshot laporan dan antrean operasi offline (`outbox_operations`) dengan kunci idempotensi unik (`idempotencyKey`).
+4. **Network Monitoring & Reconnect Reconciliation:** Menggunakan `@react-native-community/netinfo` untuk mendeteksi status online/offline dan memicu rekonsiliasi outbox secara otomatis saat jaringan pulih.
+5. **PostgreSQL RLS Migrations:** Menyediakan skema database lengkap dan kebijakan keamanan Row Level Security pada `supabase/migrations/20261116000000_create_reports_table.sql`.
+
+### 7.2 Pengujian Unit Reaktif RxJS & Ordering
+
+Jalankan pengujian unit Pertemuan 11:
+```bash
+node scripts/test-p11-reactive.mjs
+```
+Pengujian memverifikasi:
+- Debounce dan normalisasi kueri pencarian.
+- `distinctUntilChanged` mengeliminasi kueri identik berulang.
+- `switchMap` membatalkan request lama dan `catchError` menjaga stream tetap hidup.
+- Idempotensi event realtime dan pencegahan *stale update* menimpa data yang lebih baru.
+- Format dan keunikan kunci idempotensi pada antrean outbox.
 

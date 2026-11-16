@@ -1,26 +1,59 @@
 /**
  * Civic Pulse - Pertemuan 11
- * Architectural Contract: Local SQLite Cache, Outbox Queue & Sync Engine Types
- * Role: Anggota 3 (Lead Network, Offline Storage & Background Processing Engineer)
+ * Architectural Contract: Local SQLite Cache, Outbox Queue & Synchronization
+ * Co-authored by: Anggota 1 (Naufal) & Anggota 3 (Robi)
  */
 
 import type { CivicReportCategory, CivicReportSeverity } from "./report";
+export type { NetworkState } from "./network";
 
-export type OutboxOperationType = "CREATE_REPORT" | "UPDATE_REPORT" | "DELETE_REPORT";
+export type NetworkStatusType = "online" | "offline" | "reconnecting";
 
-export type OutboxStatus = "pending" | "processing" | "synced" | "failed_permanent";
+export type SyncState = "idle" | "pending" | "syncing" | "synced" | "failed";
 
-export type OutboxOperation = {
-  operation_id: string; // UUID / Idempotency Key unik
-  entity_type: "report";
-  entity_id: string;
-  operation_type: OutboxOperationType;
-  payload: string; // Serialized JSON payload (bebas token/rahasia)
+export type OutboxOperationType =
+  | "CREATE_REPORT"
+  | "UPDATE_REPORT"
+  | "DELETE_REPORT"
+  | "UPDATE_STATUS";
+
+export type OutboxOperationStatus =
+  | "pending"
+  | "processing"
+  | "synced"
+  | "failed_permanent";
+
+export type OutboxStatus = OutboxOperationStatus;
+
+export type OutboxOperation<T = any> = {
+  operation_id: string;
+  operationId?: string;
+  entity_type?: "report";
+  entity_id?: string;
+  idempotencyKey?: string;
+  operation_type?: OutboxOperationType;
+  type?: OutboxOperationType;
+  payload: T;
   created_at: string;
+  createdAt?: string;
   retry_count: number;
+  retryCount?: number;
   next_attempt_at: string;
-  status: OutboxStatus;
+  status: OutboxOperationStatus;
   last_error: string | null;
+  error?: string | null;
+  updatedAt?: string;
+};
+
+export type EnqueueOperationInput = {
+  operation_id?: string;
+  operationId?: string;
+  entity_type?: "report";
+  entity_id?: string;
+  idempotencyKey?: string;
+  operation_type?: OutboxOperationType;
+  type?: OutboxOperationType;
+  payload: string;
 };
 
 export type CachedCivicReport = {
@@ -46,6 +79,14 @@ export type SyncResult = {
   timestamp: string;
 };
 
+export type RepositoryResult<T> = {
+  success: boolean;
+  data: T | null;
+  error: string | null;
+  isFromCache?: boolean;
+  staleTimestamp?: string | null;
+};
+
 export interface ILocalReportStore {
   initialize(): Promise<void>;
   upsertReports(reports: CachedCivicReport[]): Promise<void>;
@@ -57,15 +98,11 @@ export interface ILocalReportStore {
 }
 
 export interface IOutboxRepository {
-  enqueueOperation(
-    operation: Omit<OutboxOperation, "operation_id" | "retry_count" | "status" | "last_error" | "created_at" | "next_attempt_at"> & {
-      operation_id?: string;
-    }
-  ): Promise<OutboxOperation>;
+  enqueueOperation(operation: EnqueueOperationInput): Promise<OutboxOperation>;
   getPendingOperations(limit?: number): Promise<OutboxOperation[]>;
-  markProcessing(operation_id: string): Promise<boolean>;
+  markProcessing(operation_id: string): Promise<boolean | void>;
   markSynced(operation_id: string): Promise<void>;
   markFailed(operation_id: string, error: string, isPermanent?: boolean): Promise<void>;
-  resetStaleProcessing(staleThresholdMs?: number): Promise<number>;
-  getPendingCount(): Promise<number>;
+  resetStaleProcessing?(staleThresholdMs?: number): Promise<number>;
+  getPendingCount?(): Promise<number>;
 }

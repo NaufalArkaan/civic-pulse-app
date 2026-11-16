@@ -205,7 +205,7 @@ export class SyncEngine {
             syncedCount++;
 
             // Update status di cache lokal
-            if (op.operation_type === "CREATE_REPORT" || op.operation_type === "UPDATE_REPORT") {
+            if ((op.operation_type === "CREATE_REPORT" || op.operation_type === "UPDATE_REPORT") && op.entity_id) {
               const currentReport = await this.reportStore.getReportById(op.entity_id);
               if (currentReport) {
                 await this.reportStore.upsertReports([
@@ -216,7 +216,7 @@ export class SyncEngine {
                   },
                 ]);
               }
-            } else if (op.operation_type === "DELETE_REPORT") {
+            } else if (op.operation_type === "DELETE_REPORT" && op.entity_id) {
               await this.reportStore.deleteReport(op.entity_id);
             }
           } else {
