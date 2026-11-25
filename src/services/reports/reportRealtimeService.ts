@@ -21,26 +21,38 @@ export class ReportRealtimeService {
   private unsubscribeProvider: (() => void) | null = null;
   private networkSubscription: Subscription | null = null;
   private isSubscribed = false;
+  private subscriberCount = 0;
 
   /**
    * Memulai langganan ke aliran event realtime dan monitor reconnect
+   * Menggunakan reference counting agar navigasi antar-layar tidak menciptakan
+   * duplikasi channel atau memutus stream saat masih ada consumer aktif.
    */
   start(): void {
+    this.subscriberCount += 1;
     if (this.isSubscribed) return;
 
-    // 1. Langganan ke provider realtime (Supabase / Mock)
+    // 1. Langganan ke provider realtime (Supabase / Local Stream)
     this.unsubscribeProvider = realtimeProvider.subscribe((event) => {
-      this.handleIncomingEvent(event);
+      void this.handleIncomingEvent(event);
     });
 
     // 2. Monitor status jaringan untuk pemicu rekonsiliasi saat reconnect
     this.networkSubscription = networkService.networkState$.subscribe((net) => {
       if (net.status === "reconnecting") {
-        this.reconcileMissedEvents();
+        void this.reconcileMissedEvents();
       }
     });
 
     this.isSubscribed = true;
+  }
+
+  getSubscriberCount(): number {
+    return this.subscriberCount;
+  }
+
+  isActive(): boolean {
+    return this.isSubscribed;
   }
 
   /**
@@ -88,9 +100,14 @@ export class ReportRealtimeService {
   }
 
   /**
-   * Berhenti berlangganan dan bersihkan channel websocket
+   * Berhenti berlangganan dan bersihkan channel websocket ketika seluruh consumer keluar
    */
-  stop(): void {
+  stop(force = false): void {
+    this.subscriberCount = force ? 0 : Math.max(0, this.subscriberCount - 1);
+    if (this.subscriberCount > 0) {
+      return;
+    }
+
     if (this.unsubscribeProvider) {
       this.unsubscribeProvider();
       this.unsubscribeProvider = null;

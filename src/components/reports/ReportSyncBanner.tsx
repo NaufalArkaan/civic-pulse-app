@@ -18,6 +18,7 @@ import { AnimatedPressable } from "../common/AnimatedPressable";
 type ReportSyncBannerProps = {
   networkState: NetworkState;
   syncState: SyncState;
+  providerName?: string;
   onSimulateRealtime: () => void;
   onProcessOutbox: () => void;
 };
@@ -25,6 +26,7 @@ type ReportSyncBannerProps = {
 export const ReportSyncBanner = memo(function ReportSyncBanner({
   networkState,
   syncState,
+  providerName = "Offline-First Local Stream",
   onSimulateRealtime,
   onProcessOutbox,
 }: ReportSyncBannerProps) {
@@ -81,7 +83,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
       <View style={styles.syncRow}>
         <View style={styles.syncInfo}>
           <Text style={styles.providerLabel}>
-            Stream: <Text style={styles.bold}>Mock Realtime Provider</Text>
+            Stream: <Text style={styles.bold}>{providerName}</Text>
           </Text>
 
           {syncState === "pending" && (

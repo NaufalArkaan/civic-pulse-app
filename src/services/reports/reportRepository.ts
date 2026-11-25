@@ -12,6 +12,18 @@ import { reportCacheRepository } from "../database/reportCacheRepository";
 import { outboxRepository } from "../database/outboxRepository";
 import { networkService } from "../network/networkService";
 import { mockRealtimeProvider } from "../../providers/realtime/MockRealtimeProvider";
+import {
+  supabaseRestClient,
+  validateStatusTransition,
+  UserRole,
+} from "../supabase/supabaseClient";
+import { classifyAppError } from "../../utils/errorTaxonomy";
+
+export type MutationSyncOutcome = "confirmed_remote" | "queued_offline" | "updated_local";
+
+export type MutationRepositoryResult<T> = RepositoryResult<T> & {
+  syncOutcome?: MutationSyncOutcome;
+};
 
 export class ReportRepository {
   private syncStateSubject = new BehaviorSubject<SyncState>("idle");
@@ -25,35 +37,62 @@ export class ReportRepository {
   }
 
   /**
-   * Mengambil daftar laporan berdasarkan kriteria pencarian dan status jaringan
+   * Mengambil daftar laporan berdasarkan kriteria pencarian dan status jaringan.
+   * Prioritas:
+   * 1. Jika online & Supabase PostgREST siap: tarik dari Supabase, perbarui cache SQLite.
+   * 2. Jika gagal atau offline: kembalikan data dari cache SQLite secara jujur (isFromCache: true).
    */
   async getReports(criteria?: SearchCriteria): Promise<RepositoryResult<Report[]>> {
     try {
       const isOnline = networkService.getNetworkState().status === "online";
+
+      if (isOnline && supabaseRestClient.isReady()) {
+        const remote = await supabaseRestClient.fetchReports(criteria);
+        if (remote.data && !remote.error) {
+          await reportCacheRepository.upsertReports(remote.data);
+          return {
+            success: true,
+            data: remote.data,
+            error: null,
+            isFromCache: false,
+            staleTimestamp: null,
+          };
+        }
+      }
+
       const cached = await reportCacheRepository.queryReports(criteria);
 
       return {
         success: true,
         data: cached,
         error: null,
-        isFromCache: !isOnline,
+        isFromCache: !isOnline || !supabaseRestClient.isReady(),
         staleTimestamp: !isOnline ? new Date().toISOString() : null,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const classified = classifyAppError(err);
       return {
         success: false,
         data: null,
-        error: err?.message || "Gagal memuat laporan.",
+        error: classified.userMessage,
       };
     }
   }
 
   /**
-   * Membuat laporan baru dengan dukungan offline outbox
+   * Membuat laporan baru dengan dukungan offline outbox & konfirmasi server jujur
    */
   async createReport(
     newReportData: Omit<Report, "id" | "createdAt" | "updatedAt">
-  ): Promise<RepositoryResult<Report>> {
+  ): Promise<MutationRepositoryResult<Report>> {
+    if (!newReportData.title || newReportData.title.trim().length < 5) {
+      return {
+        success: false,
+        data: null,
+        error: "Judul laporan minimal harus 5 karakter.",
+      };
+    }
+
     const reportId = `rep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     const idempotencyKey = `idemp_${reportId}`;
@@ -61,6 +100,7 @@ export class ReportRepository {
     const report: Report = {
       ...newReportData,
       id: reportId,
+      status: "submitted", // Authoritative initial status
       createdAt: now,
       updatedAt: now,
     };
@@ -68,18 +108,42 @@ export class ReportRepository {
     const isOnline = networkService.getNetworkState().status === "online";
 
     if (isOnline) {
-      // 1. Jalur Online: Simpan ke cache dan pancarkan event realtime
       await reportCacheRepository.upsertReport(report);
-      mockRealtimeProvider.emitSimulatedEvent("INSERT", report);
 
+      if (supabaseRestClient.isReady()) {
+        const remoteRes = await supabaseRestClient.upsertReportRemote(report, idempotencyKey);
+        if (!remoteRes.confirmed) {
+          await outboxRepository.enqueueOperation("CREATE_REPORT", report, idempotencyKey);
+          this.syncStateSubject.next("pending");
+          return {
+            success: true,
+            data: report,
+            error: remoteRes.error?.userMessage ?? null,
+            isFromCache: true,
+            syncOutcome: "queued_offline",
+          };
+        }
+
+        mockRealtimeProvider.emitSimulatedEvent("INSERT", report);
+        return {
+          success: true,
+          data: report,
+          error: null,
+          isFromCache: false,
+          syncOutcome: "confirmed_remote",
+        };
+      }
+
+      mockRealtimeProvider.emitSimulatedEvent("INSERT", report);
       return {
         success: true,
         data: report,
         error: null,
         isFromCache: false,
+        syncOutcome: "updated_local",
       };
     } else {
-      // 2. Jalur Offline: Simpan ke cache lokal dan masukkan ke Outbox Queue
+      // Jalur Offline: Simpan ke cache lokal dan masukkan ke Outbox Queue
       await reportCacheRepository.upsertReport(report);
       await outboxRepository.enqueueOperation("CREATE_REPORT", report, idempotencyKey);
 
@@ -89,24 +153,36 @@ export class ReportRepository {
         success: true,
         data: report,
         error: null,
-        isFromCache: true, // Beri label bahwa data tersimpan di outbox lokal
+        isFromCache: true,
+        syncOutcome: "queued_offline",
       };
     }
   }
 
   /**
-   * Memperbarui status laporan (misal: verifikasi oleh petugas)
+   * Memperbarui status laporan dengan validasi Authoritative State Machine & Role
    */
   async updateReportStatus(
     reportId: string,
-    newStatus: ReportStatus
-  ): Promise<RepositoryResult<Report>> {
+    newStatus: ReportStatus,
+    actorRole: UserRole = "field_officer"
+  ): Promise<MutationRepositoryResult<Report>> {
     const existing = await reportCacheRepository.getReportById(reportId);
     if (!existing) {
       return {
         success: false,
         data: null,
-        error: "Laporan tidak ditemukan di cache lokal.",
+        error: "Laporan tidak ditemukan di pangkalan data lokal.",
+      };
+    }
+
+    // Validasi otoritatif transisi status
+    const transitionCheck = validateStatusTransition(existing.status, newStatus, actorRole);
+    if (!transitionCheck.valid) {
+      return {
+        success: false,
+        data: null,
+        error: transitionCheck.reason,
       };
     }
 
@@ -116,24 +192,54 @@ export class ReportRepository {
       updatedAt: new Date().toISOString(),
     };
 
+    const idempotencyKey = `idemp_status_${reportId}_${newStatus}`;
     const isOnline = networkService.getNetworkState().status === "online";
 
     if (isOnline) {
       await reportCacheRepository.upsertReport(updated);
-      mockRealtimeProvider.emitSimulatedEvent("UPDATE", updated);
 
+      if (supabaseRestClient.isReady()) {
+        const remoteRes = await supabaseRestClient.upsertReportRemote(updated, idempotencyKey);
+        if (!remoteRes.confirmed) {
+          await outboxRepository.enqueueOperation(
+            "UPDATE_STATUS",
+            { id: reportId, status: newStatus },
+            idempotencyKey
+          );
+          this.syncStateSubject.next("pending");
+          return {
+            success: true,
+            data: updated,
+            error: remoteRes.error?.userMessage ?? null,
+            isFromCache: true,
+            syncOutcome: "queued_offline",
+          };
+        }
+
+        mockRealtimeProvider.emitSimulatedEvent("UPDATE", updated);
+        return {
+          success: true,
+          data: updated,
+          error: null,
+          isFromCache: false,
+          syncOutcome: "confirmed_remote",
+        };
+      }
+
+      mockRealtimeProvider.emitSimulatedEvent("UPDATE", updated);
       return {
         success: true,
         data: updated,
         error: null,
         isFromCache: false,
+        syncOutcome: "updated_local",
       };
     } else {
       await reportCacheRepository.upsertReport(updated);
       await outboxRepository.enqueueOperation(
         "UPDATE_STATUS",
         { id: reportId, status: newStatus },
-        `idemp_status_${reportId}_${Date.now()}`
+        idempotencyKey
       );
       this.syncStateSubject.next("pending");
 
@@ -142,6 +248,7 @@ export class ReportRepository {
         data: updated,
         error: null,
         isFromCache: true,
+        syncOutcome: "queued_offline",
       };
     }
   }

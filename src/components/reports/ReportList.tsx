@@ -11,7 +11,7 @@
  * - Empty state informatif dengan tombol reset kriteria pencarian.
  */
 
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -99,8 +99,9 @@ export const ReportList = memo(function ReportList({
     );
   }, [loading, reports.length, onResetFilters]);
 
-  // Header banner for offline cache notice & in-flight sync indicator
-  const renderHeader = useCallback(() => {
+  // Header element memoized sebagai ReactElement (bukan component function)
+  // untuk menjaga fokus TextInput di ReportSearchBar dan menghindari remount (>16ms spike)
+  const headerElement = useMemo(() => {
     return (
       <View>
         {ListHeaderComponent}
@@ -109,7 +110,7 @@ export const ReportList = memo(function ReportList({
         {isFromCache && (
           <View style={styles.cacheNotice}>
             <Text style={styles.cacheNoticeText}>
-              📦 Mode Offline: Menampilkan data tersimpan dari cache lokal SQLite
+              📦 Mode Offline / Cache Lokal: Menampilkan data tersimpan dari SQLite
             </Text>
           </View>
         )}
@@ -131,7 +132,7 @@ export const ReportList = memo(function ReportList({
         data={reports}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={headerElement}
         ListEmptyComponent={renderEmptyComponent}
         refreshControl={refreshControl}
         contentContainerStyle={[styles.listContent, contentContainerStyle]}

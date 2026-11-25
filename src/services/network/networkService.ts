@@ -17,10 +17,18 @@ class NetworkService {
   });
 
   private unsubscribeNetInfo: (() => void) | null = null;
+  private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
   private isSimulatedOverride = false;
 
   constructor() {
     this.init();
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimerId) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
+    }
   }
 
   private init() {
@@ -49,7 +57,9 @@ class NetworkService {
 
       // Transisi dari reconnecting ke online normal setelah jeda singkat
       if (nextStatus === "reconnecting") {
-        setTimeout(() => {
+        this.clearReconnectTimer();
+        this.reconnectTimerId = setTimeout(() => {
+          this.reconnectTimerId = null;
           if (!this.isSimulatedOverride) {
             this.networkSubject.next({
               ...this.networkSubject.value,
@@ -105,9 +115,10 @@ class NetworkService {
   }
 
   /**
-   * Cleanup listener saat lifecycle berakhir
+   * Cleanup listener dan timer saat lifecycle berakhir
    */
   cleanup(): void {
+    this.clearReconnectTimer();
     if (this.unsubscribeNetInfo) {
       this.unsubscribeNetInfo();
       this.unsubscribeNetInfo = null;

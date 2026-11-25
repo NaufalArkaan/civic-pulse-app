@@ -9,7 +9,7 @@
  * - FileSystem Scoped Storage & JIT Permissions: Anggota 3 (Robi)
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -47,8 +47,29 @@ export default function VaultScreen() {
   // State untuk Just-In-Time (JIT) Runtime Permission & Scoped Storage Modal
   const [isJitModalVisible, setIsJitModalVisible] = useState<boolean>(false);
 
-  // State feedback toast sukses operasi lokal
+  // State feedback toast sukses operasi lokal dengan lifecycle timer cleanup (Check 3)
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showTimedSuccessToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setSuccessMessage(msg);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setSuccessMessage(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const {
     files,
@@ -98,10 +119,9 @@ export default function VaultScreen() {
     setIsJitModalVisible(false);
     const success = await importDocument();
     if (success) {
-      setSuccessMessage("Berkas berhasil disalin ke Scoped Storage privat aplikasi!");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      showTimedSuccessToast("Berkas berhasil disalin ke Scoped Storage privat aplikasi!");
     }
-  }, [importDocument]);
+  }, [importDocument, showTimedSuccessToast]);
 
   const handleCancelImport = useCallback(() => {
     setIsJitModalVisible(false);
@@ -126,10 +146,9 @@ Catatan Keamanan: Berkas ini disimpan di direktori privat tanpa ekspos publik.`;
     );
 
     if (success) {
-      setSuccessMessage("Dokumen simulasi offline berhasil dibuat di sandbox!");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      showTimedSuccessToast("Dokumen simulasi offline berhasil dibuat di sandbox!");
     }
-  }, [addDemoReport]);
+  }, [addDemoReport, showTimedSuccessToast]);
 
   /**
    * Menghapus dokumen dari vault
@@ -138,11 +157,10 @@ Catatan Keamanan: Berkas ini disimpan di direktori privat tanpa ekspos publik.`;
     async (id: string) => {
       const success = await deleteFile(id);
       if (success) {
-        setSuccessMessage("Berkas fisik dan metadata berhasil dihapus dari vault.");
-        setTimeout(() => setSuccessMessage(null), 4000);
+        showTimedSuccessToast("Berkas fisik dan metadata berhasil dihapus dari vault.");
       }
     },
-    [deleteFile]
+    [deleteFile, showTimedSuccessToast]
   );
 
   return (

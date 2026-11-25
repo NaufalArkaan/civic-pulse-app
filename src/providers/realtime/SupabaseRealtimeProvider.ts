@@ -15,23 +15,30 @@ import {
   RealtimeReportEvent,
 } from "../../types/realtime";
 import { mockRealtimeProvider } from "./MockRealtimeProvider";
+import {
+  auditSupabaseEnvironment,
+  SupabaseEnvironmentAudit,
+} from "../../services/supabase/supabaseClient";
 
 export class SupabaseRealtimeProvider implements IRealtimeProvider {
   private activeProvider: IRealtimeProvider;
   private isConfigured: boolean;
+  private envAudit: SupabaseEnvironmentAudit;
 
   constructor() {
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    this.envAudit = auditSupabaseEnvironment();
 
-    if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("dummy")) {
+    if (this.envAudit.isConfigured && !this.envAudit.securityViolation) {
       this.isConfigured = true;
-      // Konfigurasi Supabase Client nyata bila environment siap
-      this.activeProvider = mockRealtimeProvider; // Fallback sampai client terinisialisasi
+      this.activeProvider = mockRealtimeProvider;
     } else {
       this.isConfigured = false;
       this.activeProvider = mockRealtimeProvider;
     }
+  }
+
+  getEnvironmentAudit(): SupabaseEnvironmentAudit {
+    return this.envAudit;
   }
 
   async connect(): Promise<void> {
@@ -51,9 +58,12 @@ export class SupabaseRealtimeProvider implements IRealtimeProvider {
   }
 
   getProviderName(): string {
+    if (this.envAudit.securityViolation) {
+      return "Blocked: Unsafe Client Key Detected (Fallback Local)";
+    }
     return this.isConfigured
-      ? "Supabase Realtime (PostgreSQL Changes)"
-      : "Mock Realtime Stream (Development / Simulasi)";
+      ? `Supabase Realtime (${this.envAudit.urlHost})`
+      : "Offline-First Local Stream (Supabase Env Pending)";
   }
 }
 

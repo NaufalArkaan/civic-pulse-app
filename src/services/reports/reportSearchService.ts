@@ -35,8 +35,8 @@ import {
   SearchResultsState,
   areSearchCriteriaEqual,
 } from "../../types/search";
-import { reportCacheRepository } from "../database/reportCacheRepository";
-import { networkService } from "../network/networkService";
+import { reportRepository } from "./reportRepository";
+import { classifyAppError } from "../../utils/errorTaxonomy";
 
 const INITIAL_CRITERIA: SearchCriteria = {
   query: "",
@@ -79,12 +79,15 @@ export class ReportSearchService {
               criteria,
             }),
             // Tangani error di inner observable agar stream utama tidak berhenti
+            // Pertahankan data cache yang sudah ada agar layar tidak kosong saat refresh gagal (Check 2)
             catchError((err) => {
+              const previousReports = this.resultsSubject.value.reports;
+              const classified = classifyAppError(err);
               return of<SearchResultsState>({
-                reports: [],
+                reports: previousReports,
                 loading: false,
-                error: err?.message || "Gagal memproses pencarian laporan.",
-                isFromCache: false,
+                error: classified.userMessage,
+                isFromCache: previousReports.length > 0,
                 criteria,
               });
             })
@@ -97,21 +100,21 @@ export class ReportSearchService {
   }
 
   /**
-   * Eksekusi pencarian laporan (Cache-first jika offline, remote jika online)
+   * Eksekusi pencarian laporan melalui ReportRepository (Supabase PostgREST -> Fallback SQLite Cache)
    */
   private executeSearch(criteria: SearchCriteria): Observable<SearchResultsState> {
-    const isOnline = networkService.getNetworkState().status === "online";
-
     return of(null).pipe(
       switchMap(async () => {
-        // Ambil data dari cache terstruktur SQLite
-        const cachedResults = await reportCacheRepository.queryReports(criteria);
+        const res = await reportRepository.getReports(criteria);
+        if (!res.success || !res.data) {
+          throw new Error(res.error || "Gagal memuat laporan.");
+        }
 
         return {
-          reports: cachedResults,
+          reports: res.data,
           loading: false,
           error: null,
-          isFromCache: !isOnline,
+          isFromCache: Boolean(res.isFromCache),
           criteria,
         };
       })

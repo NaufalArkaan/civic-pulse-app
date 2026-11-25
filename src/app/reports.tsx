@@ -44,8 +44,13 @@ export default function ReportsScreen() {
   // State untuk modal detail laporan
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
-  // State umpan balik mikro (Toast)
+  // State umpan balik mikro (Toast) dengan tipe jujur (success / error / info)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
+
+  const handleDismissToast = useCallback(() => {
+    setToastMessage(null);
+  }, []);
 
   const {
     reports,
@@ -55,6 +60,7 @@ export default function ReportsScreen() {
     criteria,
     networkState,
     syncState,
+    activeProviderName,
     setSearchQuery,
     setCategoryFilter,
     setStatusFilter,
@@ -79,15 +85,16 @@ export default function ReportsScreen() {
     setSearchQuery("");
     setCategoryFilter("all");
     setStatusFilter("all");
+    setToastType("info");
     setToastMessage("Kriteria filter telah direset");
   }, [setSearchQuery, setCategoryFilter, setStatusFilter]);
 
   /**
-   * Pembaharuan status laporan dengan umpan balik taktil dan visual
+   * Pembaharuan status laporan secara jujur (Check 2):
+   * - Membedakan konfirmasi server vs masuk antrean outbox offline vs gagal validasi.
    */
   const handleUpdateStatus = useCallback(
-    (id: string, newStatus: ReportStatus) => {
-      updateReportStatus(id, newStatus);
+    async (id: string, newStatus: ReportStatus) => {
       const statusNames: Record<ReportStatus, string> = {
         submitted: "Diajukan",
         verified: "Terverifikasi",
@@ -95,7 +102,27 @@ export default function ReportsScreen() {
         resolved: "Telah Selesai",
         rejected: "Ditolak",
       };
-      setToastMessage(`Status laporan diperbarui: ${statusNames[newStatus] || newStatus}`);
+      const label = statusNames[newStatus] || newStatus;
+      const res = await updateReportStatus(id, newStatus);
+
+      if (!res.success) {
+        setToastType("error");
+        setToastMessage(res.error || "Gagal memperbarui status laporan.");
+        return;
+      }
+
+      if (res.syncOutcome === "queued_offline") {
+        setToastType("info");
+        setToastMessage(
+          `Status '${label}' disimpan di Outbox Lokal (Menunggu konfirmasi server saat online)`
+        );
+      } else if (res.syncOutcome === "confirmed_remote") {
+        setToastType("success");
+        setToastMessage(`Terkonfirmasi Server: Status laporan diperbarui ke '${label}'`);
+      } else {
+        setToastType("success");
+        setToastMessage(`Status laporan diperbarui secara lokal: ${label}`);
+      }
     },
     [updateReportStatus]
   );
@@ -108,6 +135,7 @@ export default function ReportsScreen() {
         <ReportSyncBanner
           networkState={networkState}
           syncState={syncState}
+          providerName={activeProviderName}
           onSimulateRealtime={simulateIncomingReport}
           onProcessOutbox={processOutbox}
         />
@@ -132,8 +160,8 @@ export default function ReportsScreen() {
         {/* Dynamic Feedback Toast */}
         <FeedbackToast
           message={toastMessage}
-          type="success"
-          onDismiss={() => setToastMessage(null)}
+          type={toastType}
+          onDismiss={handleDismissToast}
         />
 
         {/* Error Alert with Retry Action */}
@@ -152,6 +180,7 @@ export default function ReportsScreen() {
   }, [
     networkState,
     syncState,
+    activeProviderName,
     simulateIncomingReport,
     processOutbox,
     criteria.query,
@@ -164,6 +193,8 @@ export default function ReportsScreen() {
     setStatusFilter,
     handleResetFilters,
     toastMessage,
+    toastType,
+    handleDismissToast,
     error,
     refresh,
   ]);

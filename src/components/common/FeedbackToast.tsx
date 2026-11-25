@@ -38,6 +38,8 @@ export const FeedbackToast = memo(function FeedbackToast({
   const translateY = useSharedValue(-20);
 
   useEffect(() => {
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
     if (message) {
       opacity.value = withTiming(1, { duration: 200, reduceMotion: ReduceMotion.System });
       translateY.value = withSpring(0, {
@@ -49,12 +51,17 @@ export const FeedbackToast = memo(function FeedbackToast({
       const timer = setTimeout(() => {
         opacity.value = withTiming(0, { duration: 250, reduceMotion: ReduceMotion.System });
         translateY.value = withTiming(-20, { duration: 250, reduceMotion: ReduceMotion.System });
-        setTimeout(() => {
+        dismissTimer = setTimeout(() => {
           onDismiss?.();
         }, 260);
       }, durationMs);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (dismissTimer) {
+          clearTimeout(dismissTimer);
+        }
+      };
     } else {
       opacity.value = 0;
       translateY.value = -20;

@@ -104,7 +104,7 @@ export function useReportSearch() {
     async (newReportData: Omit<Report, "id" | "createdAt" | "updatedAt">) => {
       const res = await reportRepository.createReport(newReportData);
       reportSearchService.refresh();
-      return res.success;
+      return res;
     },
     []
   );
@@ -113,7 +113,7 @@ export function useReportSearch() {
     async (id: string, status: ReportStatus) => {
       const res = await reportRepository.updateReportStatus(id, status);
       reportSearchService.refresh();
-      return res.success;
+      return res;
     },
     []
   );
@@ -157,6 +157,7 @@ export function useReportSearch() {
     criteria: searchState.criteria,
     networkState,
     syncState,
+    activeProviderName: reportRealtimeService.getActiveProviderName(),
     setSearchQuery,
     setCategoryFilter,
     setStatusFilter,

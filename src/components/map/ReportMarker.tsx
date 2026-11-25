@@ -121,6 +121,9 @@ export const ReportMarker = memo(
     return (
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.report.id === nextProps.report.id &&
+      prevProps.report.severity === nextProps.report.severity &&
+      prevProps.report.category === nextProps.report.category &&
+      prevProps.report.updatedAt === nextProps.report.updatedAt &&
       prevProps.report.coordinate.latitude === nextProps.report.coordinate.latitude &&
       prevProps.report.coordinate.longitude === nextProps.report.coordinate.longitude
     );
