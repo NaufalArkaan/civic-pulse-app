@@ -177,7 +177,7 @@ export default function ReportsScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
         <View style={[styles.contentWrapper, centeredContainerStyle]}>
