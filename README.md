@@ -164,3 +164,47 @@ Pengujian memverifikasi:
 - Idempotensi event realtime dan pencegahan *stale update* menimpa data yang lebih baru.
 - Format dan keunikan kunci idempotensi pada antrean outbox.
 
+---
+
+## 8. Milestone 4 (Pertemuan 12) — Advanced UI Polish, Animations & Responsiveness
+
+Milestone 4 berfokus pada penyempurnaan menyeluruh pengalaman pengguna (*UI Polish*), interaktivitas mikro berkinerja tinggi, dan adaptasi tata letak responsif terhadap berbagai ukuran layar dan orientasi (Sub-CPMK 10):
+
+### 8.1 Komponen & Peningkatan Inti Pertemuan 12
+1. **Responsive Viewport Engine (`useResponsiveLayout` & `breakpoints.ts`):**
+   - Menggunakan `useWindowDimensions()` reaktif (bebas dari dimensi statis yang hanya di-mount sekali).
+   - Klasifikasi breakpoint perangkat: `compact` (<600dp), `medium` (600–767dp), `tablet` (768–1023dp), dan `expanded` (>=1024dp).
+   - Pembatasan lebar maksimum konten (`maxContentWidth: 960`, `maxCardWidth: 640`, `maxModalWidth: 540`) untuk mencegah peregangan berlebih pada tablet atau saat rotasi landscape.
+2. **Reanimated Micro-Interactions (`react-native-reanimated` 4.x):**
+   - `AnimatedPressable`: Komponen tombol sentuh dengan umpan balik pegas mikro (*scale 0.96* dengan `withSpring` dan `ReduceMotion.System`).
+   - `FeedbackToast`: Banner umpan balik visual dan taktil yang halus setelah aksi CRUD (sukses simpan berkas, update status laporan).
+   - `ReportSkeletonList` & `SkeletonLoader`: Animasi shimmer/pulse berbasis native thread tanpa overhead komputasi berlebih.
+   - `SelectedReportCard`: Animasi transisi slide-up berpegas dinamis saat memilih marker pada peta.
+   - Expand/Collapse filter panel pada `ReportFilterBar` untuk menghemat ruang vertikal pada layar kompak atau mode landscape.
+3. **Keyboard Handling & Penghapusan Nested VirtualizedList:**
+   - Mengeliminasi antipattern nested `ScrollView` pembungkus `FlatList` pada `reports.tsx` dengan menyatukan seluruh header feed (Sync Banner, Search Bar, Filter Chips, Error Alert, Feedback Toast) ke dalam `ListHeaderComponent`.
+   - Konfigurasi `KeyboardAvoidingView` adaptif per platform (`behavior="padding"` di iOS dengan vertical offset insets, dan `"height"` di Android).
+   - Menetapkan `keyboardShouldPersistTaps="handled"` agar interaksi pada filter chips dan cards responsif seketika tanpa harus menutup keyboard terlebih dahulu.
+4. **Pemisahan State Presentasional Komprehensif:**
+   - *Cold start initial loading*: Menampilkan `ReportSkeletonList` yang meniru kartu laporan.
+   - *Cached content + refreshing*: Menjaga data yang sedang dibaca pengguna tetap tampil dengan banner cache lokal SQLite dan indikator sinkronisasi inline (tidak menimpa konten dengan skeleton).
+   - *Empty state*: Tampilan ramah warga saat pencarian nihil, dilengkapi tombol cepat `🔄 Reset Semua Filter`.
+   - *Error state*: Banner galat dengan aksi coba lagi `Coba Lagi`.
+5. **Ergonomi & Aksesibilitas (WCAG AA/AAA):**
+   - Seluruh target sentuh tombol interaktif memenuhi minimum $\ge 44\text{ dp}$.
+   - Indikator status ganda non-warna (ikon emoji deskriptif + teks label tegas).
+
+### 8.2 Pengujian Unit Responsif & Ergonomi
+
+Jalankan pengujian unit Pertemuan 12:
+```bash
+node scripts/test-p12-responsive.mjs
+```
+Pengujian memverifikasi:
+- Deteksi orientasi portrait vs landscape secara akurat.
+- Penentuan tingkat perangkat (*compact*, *medium*, *tablet*, *expanded*).
+- Penskalaan padding responsif dan batasan lebar kartu / modal.
+- Kontrak pemisahan status tampilan (Skeleton vs Cache vs Empty vs Error).
+- Validasi konstanta animasi pegas dan batas opacity skeleton.
+
+

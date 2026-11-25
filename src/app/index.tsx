@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, View, Text } from "react-native";
 import MapView from "react-native-maps";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,6 +33,7 @@ import {
 } from "../components/map";
 import { reportSearchService } from "../services/reports/reportSearchService";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { AnimatedPressable } from "../components/common";
 
 export default function MapScreen() {
   const router = useRouter();
@@ -175,7 +176,7 @@ export default function MapScreen() {
         pointerEvents="box-none"
       >
         <View style={styles.topActionRow} pointerEvents="box-none">
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.reportsPillButton}
             onPress={() => router.push("/reports" as any)}
             accessibilityRole="button"
@@ -183,9 +184,9 @@ export default function MapScreen() {
           >
             <Text style={styles.reportsPillIcon}>⚡</Text>
             <Text style={styles.reportsPillText}>Real-Time Feed</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
 
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.vaultPillButton}
             onPress={() => router.push("/vault" as any)}
             accessibilityRole="button"
@@ -193,7 +194,7 @@ export default function MapScreen() {
           >
             <Text style={styles.vaultPillIcon}>🔐</Text>
             <Text style={styles.vaultPillText}>Document Vault</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <MapControls

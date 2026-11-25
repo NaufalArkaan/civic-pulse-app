@@ -6,8 +6,6 @@ import {
   sanitizeOutboxPayload,
   classifySyncError,
   reconcileReports,
-  MAX_OUTBOX_RETRIES,
-  BASE_BACKOFF_DELAY_MS,
   MAX_BACKOFF_DELAY_MS,
 } from "../src/utils/syncUtils.ts";
 

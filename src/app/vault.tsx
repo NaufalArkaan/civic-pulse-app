@@ -16,7 +16,6 @@ import {
   ScrollView,
   RefreshControl,
   Text,
-  TouchableOpacity,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +33,7 @@ import {
   VaultJitModal,
 } from "../components/vault";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { FeedbackToast } from "../components/common";
 
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
@@ -172,14 +172,11 @@ Catatan Keamanan: Berkas ini disimpan di direktori privat tanpa ekspos publik.`;
           }
         >
           {/* Success Feedback Toast */}
-          {successMessage && (
-            <View style={styles.successBanner}>
-              <Text style={styles.successText}>✅ {successMessage}</Text>
-              <TouchableOpacity onPress={() => setSuccessMessage(null)}>
-                <Text style={styles.bannerCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <FeedbackToast
+            message={successMessage}
+            type="success"
+            onDismiss={() => setSuccessMessage(null)}
+          />
 
           {/* Error banner jika ada kegagalan operasi berkas */}
           {error && (

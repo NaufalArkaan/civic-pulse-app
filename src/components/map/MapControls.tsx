@@ -11,10 +11,11 @@
  */
 
 import React, { memo } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { MapControlsProps } from "../../types/components";
 import { TrackingMode } from "../../types/location";
 import { TRACKING_CONFIG } from "../../constants/tracking";
+import { AnimatedPressable } from "../common/AnimatedPressable";
 
 const MODES: TrackingMode[] = ["low", "balanced", "high"];
 
@@ -36,7 +37,7 @@ export const MapControls = memo(function MapControls({
             const displayLabel = m === "low" ? "50m" : m === "balanced" ? "20m" : "5m";
 
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={m}
                 style={[styles.pill, isActive && styles.pillActive]}
                 onPress={() => onModeChange(m)}
@@ -48,14 +49,14 @@ export const MapControls = memo(function MapControls({
                 <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
                   {displayLabel}
                 </Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
       </View>
 
       {/* Recenter Button ("Lokasi Saya") */}
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.recenterButton, isRecenterDisabled && styles.recenterDisabled]}
         onPress={onRecenter}
         disabled={isRecenterDisabled}
@@ -69,7 +70,7 @@ export const MapControls = memo(function MapControls({
         <Text style={[styles.recenterText, isRecenterDisabled && styles.recenterTextDisabled]}>
           Lokasi Saya
         </Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 });

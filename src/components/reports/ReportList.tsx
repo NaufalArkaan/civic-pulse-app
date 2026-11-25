@@ -15,15 +15,18 @@ import React, { memo, useCallback } from "react";
 import {
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   FlatList,
   ListRenderItem,
   ActivityIndicator,
+  StyleProp,
+  ViewStyle,
+  Platform,
 } from "react-native";
 import { Report, ReportStatus } from "../../types/report";
 import { ReportItem } from "./ReportItem";
 import { ReportSkeletonList } from "./ReportSkeleton";
+import { AnimatedPressable } from "../common/AnimatedPressable";
 
 type ReportListProps = {
   reports: Report[];
@@ -32,6 +35,10 @@ type ReportListProps = {
   onUpdateStatus?: (id: string, newStatus: ReportStatus) => void;
   onPressItem?: (report: Report) => void;
   onResetFilters?: () => void;
+  ListHeaderComponent?: React.ReactElement | null;
+  refreshControl?: React.ReactElement;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+  keyboardShouldPersistTaps?: "always" | "never" | "handled";
 };
 
 export const ReportList = memo(function ReportList({
@@ -41,6 +48,10 @@ export const ReportList = memo(function ReportList({
   onUpdateStatus,
   onPressItem,
   onResetFilters,
+  ListHeaderComponent,
+  refreshControl,
+  contentContainerStyle,
+  keyboardShouldPersistTaps = "handled",
 }: ReportListProps) {
   const renderItem: ListRenderItem<Report> = useCallback(
     ({ item }) => (
@@ -55,13 +66,14 @@ export const ReportList = memo(function ReportList({
 
   const keyExtractor = useCallback((item: Report) => item.id, []);
 
-  // Initial Loading State: Tampilkan skeleton saat belum ada data sama sekali
-  if (reports.length === 0 && loading) {
-    return <ReportSkeletonList />;
-  }
+  // Empty state component
+  const renderEmptyComponent = useCallback(() => {
+    // Initial Cold Start: Skeletons placeholder
+    if (loading && reports.length === 0) {
+      return <ReportSkeletonList />;
+    }
 
-  // Empty State: Hanya ketika selesai loading dan hasil memang 0
-  if (reports.length === 0 && !loading) {
+    // Filter or Search yields zero results
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
@@ -74,48 +86,61 @@ export const ReportList = memo(function ReportList({
         </Text>
 
         {onResetFilters && (
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.resetButton}
             onPress={onResetFilters}
             accessibilityRole="button"
             accessibilityLabel="Reset kriteria pencarian dan filter"
           >
             <Text style={styles.resetButtonText}>🔄 Reset Semua Filter</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         )}
       </View>
     );
-  }
+  }, [loading, reports.length, onResetFilters]);
+
+  // Header banner for offline cache notice & in-flight sync indicator
+  const renderHeader = useCallback(() => {
+    return (
+      <View>
+        {ListHeaderComponent}
+
+        {/* Offline Cache Notice Banner */}
+        {isFromCache && (
+          <View style={styles.cacheNotice}>
+            <Text style={styles.cacheNoticeText}>
+              📦 Mode Offline: Menampilkan data tersimpan dari cache lokal SQLite
+            </Text>
+          </View>
+        )}
+
+        {/* Subtle In-flight Pipeline Indicator */}
+        {loading && reports.length > 0 && (
+          <View style={styles.inlineLoadingBar}>
+            <ActivityIndicator size="small" color="#208AEF" />
+            <Text style={styles.inlineLoadingText}>Menyinkronkan hasil pencarian...</Text>
+          </View>
+        )}
+      </View>
+    );
+  }, [ListHeaderComponent, isFromCache, loading, reports.length]);
 
   return (
     <View style={styles.container}>
-      {/* Offline Cache Notice Banner */}
-      {isFromCache && (
-        <View style={styles.cacheNotice}>
-          <Text style={styles.cacheNoticeText}>
-            📦 Mode Offline: Menampilkan data tersimpan dari cache lokal SQLite
-          </Text>
-        </View>
-      )}
-
-      {/* Subtle In-flight Pipeline Indicator */}
-      {loading && reports.length > 0 && (
-        <View style={styles.inlineLoadingBar}>
-          <ActivityIndicator size="small" color="#208AEF" />
-          <Text style={styles.inlineLoadingText}>Menyinkronkan hasil pencarian...</Text>
-        </View>
-      )}
-
-      {/* Virtualized FlatList */}
       <FlatList
         data={reports}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        scrollEnabled={false} // Dikendalikan oleh parent ScrollView
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyComponent}
+        refreshControl={refreshControl}
+        contentContainerStyle={[styles.listContent, contentContainerStyle]}
+        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+        showsVerticalScrollIndicator={false}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={5}
-        removeClippedSubviews={false}
+        removeClippedSubviews={Platform.OS === "android"}
       />
     </View>
   );
@@ -123,8 +148,10 @@ export const ReportList = memo(function ReportList({
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 4,
-    paddingBottom: 24,
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 32,
   },
   cacheNotice: {
     backgroundColor: "#FFFBEB",

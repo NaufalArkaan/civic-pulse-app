@@ -14,11 +14,11 @@ import React, { memo } from "react";
 import {
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   View,
   Text,
   ActivityIndicator,
 } from "react-native";
+import { AnimatedPressable } from "../common/AnimatedPressable";
 
 type ReportSearchBarProps = {
   value: string;
@@ -56,7 +56,7 @@ export const ReportSearchBar = memo(function ReportSearchBar({
             <ActivityIndicator size="small" color="#208AEF" />
           </View>
         ) : value.length > 0 ? (
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.clearBtn}
             onPress={() => onChangeText("")}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -64,7 +64,7 @@ export const ReportSearchBar = memo(function ReportSearchBar({
             accessibilityLabel="Hapus kata kunci pencarian"
           >
             <Text style={styles.clearText}>✕</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ) : null}
       </View>
 

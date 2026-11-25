@@ -11,8 +11,9 @@
  */
 
 import React, { memo } from "react";
-import { StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
+import { StyleSheet, Text, View, Alert } from "react-native";
 import { VaultFileItemProps } from "../../types/components";
+import { AnimatedPressable } from "../common/AnimatedPressable";
 
 export const VaultFileItem = memo(
   function VaultFileItem({ item, onOpen, onDelete }: VaultFileItemProps) {
@@ -55,10 +56,9 @@ export const VaultFileItem = memo(
     }`;
 
     return (
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.container, item.isMissing && styles.containerMissing]}
         onPress={() => onOpen(item)}
-        activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
         accessibilityHint="Ketuk untuk melihat rincian dan pratinjau dokumen"
@@ -96,7 +96,7 @@ export const VaultFileItem = memo(
         </View>
 
         {/* Delete Action Button */}
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.deleteButton}
           onPress={handleDeletePress}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -105,8 +105,8 @@ export const VaultFileItem = memo(
           accessibilityHint="Menghapus berkas fisik dan metadata dari Document Vault"
         >
           <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </AnimatedPressable>
+      </AnimatedPressable>
     );
   },
   (prevProps, nextProps) => {

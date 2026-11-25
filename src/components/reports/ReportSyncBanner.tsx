@@ -10,9 +10,10 @@
  */
 
 import React, { memo } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { NetworkState, SyncState } from "../../types/sync";
 import { networkService } from "../../services/network/networkService";
+import { AnimatedPressable } from "../common/AnimatedPressable";
 
 type ReportSyncBannerProps = {
   networkState: NetworkState;
@@ -63,7 +64,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
         </View>
 
         {/* Development Network Toggle Simulation */}
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.simButton, !isOnline && styles.simButtonOffline]}
           onPress={handleToggleNetworkSimulation}
           accessibilityRole="button"
@@ -73,7 +74,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
           <Text style={[styles.simButtonText, !isOnline && styles.simButtonTextOffline]}>
             {isOnline ? "Simulasi Offline" : "Simulasi Online"}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {/* Sync State & Interactive Live Trigger */}
@@ -84,7 +85,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
           </Text>
 
           {syncState === "pending" && (
-            <TouchableOpacity
+            <AnimatedPressable
               onPress={onProcessOutbox}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityRole="button"
@@ -93,7 +94,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
               <Text style={styles.outboxPendingText}>
                 ⏳ Ada laporan di outbox • Ketuk untuk kirim
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
 
           {syncState === "syncing" && (
@@ -104,7 +105,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
         </View>
 
         {/* Live Event Trigger Button */}
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.emitEventButton}
           onPress={onSimulateRealtime}
           accessibilityRole="button"
@@ -112,7 +113,7 @@ export const ReportSyncBanner = memo(function ReportSyncBanner({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.emitEventButtonText}>⚡ Kirim Event Live</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
   );

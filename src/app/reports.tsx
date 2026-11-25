@@ -9,14 +9,13 @@
  * - Local SQLite Cache & Outbox Queue: Anggota 3 (Robi)
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
   RefreshControl,
   Text,
-  TouchableOpacity,
   Modal,
   Platform,
   KeyboardAvoidingView,
@@ -25,7 +24,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import { Report } from "../types/report";
+import { Report, ReportStatus } from "../types/report";
 import { useReportSearch } from "../hooks/useReportSearch";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { LAYOUT_CONSTRAINTS } from "../constants/breakpoints";
@@ -35,14 +34,18 @@ import {
   ReportSyncBanner,
   ReportList,
 } from "../components/reports";
+import { AnimatedPressable, FeedbackToast } from "../components/common";
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { centeredContainerStyle } = useResponsiveLayout();
+  const { width, height, centeredContainerStyle } = useResponsiveLayout();
 
   // State untuk modal detail laporan
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+
+  // State umpan balik mikro (Toast)
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const {
     reports,
@@ -76,7 +79,97 @@ export default function ReportsScreen() {
     setSearchQuery("");
     setCategoryFilter("all");
     setStatusFilter("all");
+    setToastMessage("Kriteria filter telah direset");
   }, [setSearchQuery, setCategoryFilter, setStatusFilter]);
+
+  /**
+   * Pembaharuan status laporan dengan umpan balik taktil dan visual
+   */
+  const handleUpdateStatus = useCallback(
+    (id: string, newStatus: ReportStatus) => {
+      updateReportStatus(id, newStatus);
+      const statusNames: Record<ReportStatus, string> = {
+        submitted: "Diajukan",
+        verified: "Terverifikasi",
+        in_progress: "Sedang Diproses",
+        resolved: "Telah Selesai",
+        rejected: "Ditolak",
+      };
+      setToastMessage(`Status laporan diperbarui: ${statusNames[newStatus] || newStatus}`);
+    },
+    [updateReportStatus]
+  );
+
+  // Komponen header virtualized list (Search, Filter, Sync Banner, Toast & Error)
+  const listHeader = useMemo(() => {
+    return (
+      <View style={styles.headerFeedContainer}>
+        {/* Network Connectivity & Realtime Outbox Banner */}
+        <ReportSyncBanner
+          networkState={networkState}
+          syncState={syncState}
+          onSimulateRealtime={simulateIncomingReport}
+          onProcessOutbox={processOutbox}
+        />
+
+        {/* Reactive Search Bar */}
+        <ReportSearchBar
+          value={criteria.query}
+          onChangeText={setSearchQuery}
+          loading={loading}
+          resultCount={reports.length}
+        />
+
+        {/* Category & Status Filter Chips */}
+        <ReportFilterBar
+          selectedCategory={criteria.category || "all"}
+          onSelectCategory={setCategoryFilter}
+          selectedStatus={criteria.status || "all"}
+          onSelectStatus={setStatusFilter}
+          onResetFilters={handleResetFilters}
+        />
+
+        {/* Dynamic Feedback Toast */}
+        <FeedbackToast
+          message={toastMessage}
+          type="success"
+          onDismiss={() => setToastMessage(null)}
+        />
+
+        {/* Error Alert with Retry Action */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <View style={styles.errorContent}>
+              <Text style={styles.errorText}>⚠️ {error}</Text>
+            </View>
+            <AnimatedPressable style={styles.retryButton} onPress={refresh}>
+              <Text style={styles.retryButtonText}>Coba Lagi</Text>
+            </AnimatedPressable>
+          </View>
+        )}
+      </View>
+    );
+  }, [
+    networkState,
+    syncState,
+    simulateIncomingReport,
+    processOutbox,
+    criteria.query,
+    criteria.category,
+    criteria.status,
+    setSearchQuery,
+    loading,
+    reports.length,
+    setCategoryFilter,
+    setStatusFilter,
+    handleResetFilters,
+    toastMessage,
+    error,
+    refresh,
+  ]);
+
+  const modalResponsiveWidth = Math.min(width - 32, LAYOUT_CONSTRAINTS.maxModalWidth);
+  const modalMaxHeight = height > 500 ? 560 : height - 40;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -84,13 +177,14 @@ export default function ReportsScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
         <View style={[styles.contentWrapper, centeredContainerStyle]}>
           {/* Top Header Bar */}
           <View style={styles.header}>
             <View style={styles.topRow}>
-              <TouchableOpacity
+              <AnimatedPressable
                 style={styles.backButton}
                 onPress={handleBackToMap}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -98,14 +192,14 @@ export default function ReportsScreen() {
                 accessibilityLabel="Kembali ke peta interaktif"
               >
                 <Text style={styles.backButtonText}>← Peta</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
 
               <View style={styles.titleContainer}>
                 <Text style={styles.title}>Laporan & Mitigasi</Text>
                 <Text style={styles.subtitle}>Real-Time Pipeline & RxJS Search</Text>
               </View>
 
-              <TouchableOpacity
+              <AnimatedPressable
                 style={styles.vaultButton}
                 onPress={() => router.push("/vault" as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -113,40 +207,19 @@ export default function ReportsScreen() {
                 accessibilityLabel="Buka Document Vault"
               >
                 <Text style={styles.vaultButtonText}>🔐 Vault</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
           </View>
 
-          {/* Network Connectivity & Realtime Outbox Banner */}
-          <ReportSyncBanner
-            networkState={networkState}
-            syncState={syncState}
-            onSimulateRealtime={simulateIncomingReport}
-            onProcessOutbox={processOutbox}
-          />
-
-          {/* Reactive Search Bar */}
-          <ReportSearchBar
-            value={criteria.query}
-            onChangeText={setSearchQuery}
+          {/* Virtualized Report Feed with Unified ListHeaderComponent */}
+          <ReportList
+            reports={reports}
             loading={loading}
-            resultCount={reports.length}
-          />
-
-          {/* Category & Status Filter Chips */}
-          <ReportFilterBar
-            selectedCategory={criteria.category || "all"}
-            onSelectCategory={setCategoryFilter}
-            selectedStatus={criteria.status || "all"}
-            onSelectStatus={setStatusFilter}
+            isFromCache={isFromCache}
+            onUpdateStatus={handleUpdateStatus}
+            onPressItem={setSelectedReport}
             onResetFilters={handleResetFilters}
-          />
-
-          {/* Reports Scrollable Feed */}
-          <ScrollView
-            style={styles.scrollArea}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={listHeader}
             refreshControl={
               <RefreshControl
                 refreshing={loading}
@@ -155,29 +228,7 @@ export default function ReportsScreen() {
                 colors={["#208AEF"]}
               />
             }
-          >
-            {/* Error Alert with Retry Action */}
-            {error && (
-              <View style={styles.errorBanner}>
-                <View style={styles.errorContent}>
-                  <Text style={styles.errorText}>⚠️ {error}</Text>
-                </View>
-                <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-                  <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Virtualized Report Feed */}
-            <ReportList
-              reports={reports}
-              loading={loading}
-              isFromCache={isFromCache}
-              onUpdateStatus={updateReportStatus}
-              onPressItem={setSelectedReport}
-              onResetFilters={handleResetFilters}
-            />
-          </ScrollView>
+          />
         </View>
       </KeyboardAvoidingView>
 
@@ -189,18 +240,25 @@ export default function ReportsScreen() {
         onRequestClose={() => setSelectedReport(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View
+            style={[
+              styles.modalCard,
+              { width: modalResponsiveWidth, maxHeight: modalMaxHeight },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} numberOfLines={1}>
                 {selectedReport?.title}
               </Text>
-              <TouchableOpacity
+              <AnimatedPressable
                 style={styles.modalCloseBtn}
                 onPress={() => setSelectedReport(null)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Tutup dialog rincian laporan"
               >
                 <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
 
             <ScrollView style={styles.modalBody}>
@@ -229,12 +287,14 @@ export default function ReportsScreen() {
               </View>
             </ScrollView>
 
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.modalActionBtn}
               onPress={() => setSelectedReport(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Tutup modal rincian"
             >
               <Text style={styles.modalActionBtnText}>Tutup</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         </View>
       </Modal>
@@ -311,6 +371,10 @@ const styles = StyleSheet.create({
   scrollArea: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+  },
+  headerFeedContainer: {
+    backgroundColor: "#F8FAFC",
+    paddingTop: 4,
   },
   scrollContent: {
     paddingBottom: 32,

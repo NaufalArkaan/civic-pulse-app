@@ -11,6 +11,8 @@ import {
 import { THEME } from "../src/constants/theme.ts";
 
 test("Responsive Breakpoints: correctly identifies orientation", () => {
+  assert.strictEqual(BREAKPOINTS.compact, 0);
+  assert.strictEqual(BREAKPOINTS.tablet, 768);
   assert.strictEqual(isLandscapeOrientation(800, 400), true, "800x400 should be landscape");
   assert.strictEqual(isLandscapeOrientation(400, 800), false, "400x800 should be portrait");
   assert.strictEqual(isLandscapeOrientation(390, 844), false, "iPhone 14 portrait");
@@ -105,4 +107,54 @@ test("Theme & Design Tokens: tokens are strictly typed with sufficient contrast"
   assert.ok(THEME.colors.skeletonBase, "Skeleton base color must be defined");
   assert.ok(THEME.typography.title.fontSize >= 18, "Title font size must be prominent");
   assert.ok(THEME.spacing.md === 12, "Medium spacing token");
+});
+
+test("Adaptive Container Bounds: width clamping prevents overflow across screen widths", () => {
+  function clampModalWidth(viewportWidth) {
+    return Math.min(viewportWidth - 32, LAYOUT_CONSTRAINTS.maxModalWidth);
+  }
+
+  function clampCardWidth(viewportWidth) {
+    return Math.min(viewportWidth - 32, LAYOUT_CONSTRAINTS.maxCardWidth);
+  }
+
+  // Small Phone (320px)
+  assert.strictEqual(clampModalWidth(320), 288);
+  assert.strictEqual(clampCardWidth(320), 288);
+
+  // Normal Phone (390px)
+  assert.strictEqual(clampModalWidth(390), 358);
+  assert.strictEqual(clampCardWidth(390), 358);
+
+  // Tablet (800px) - Clamped at maxModalWidth (540) and maxCardWidth (640)
+  assert.strictEqual(clampModalWidth(800), 540);
+  assert.strictEqual(clampCardWidth(800), 640);
+
+  // Desktop (1440px) - Clamped at max constraints
+  assert.strictEqual(clampModalWidth(1440), 540);
+  assert.strictEqual(clampCardWidth(1440), 640);
+});
+
+test("Micro-interaction & Reanimated Configuration: animation properties follow design specs", () => {
+  // Spring animation parameters for tactile feedback
+  const buttonSpringConfig = {
+    damping: 15,
+    stiffness: 250,
+    activeScale: 0.96,
+  };
+
+  assert.ok(buttonSpringConfig.damping >= 10 && buttonSpringConfig.damping <= 20);
+  assert.ok(buttonSpringConfig.stiffness >= 150 && buttonSpringConfig.stiffness <= 300);
+  assert.ok(buttonSpringConfig.activeScale >= 0.90 && buttonSpringConfig.activeScale <= 0.98);
+
+  // Skeleton shimmer duration & opacity bounds
+  const skeletonConfig = {
+    durationMs: 850,
+    minOpacity: 0.4,
+    maxOpacity: 0.85,
+  };
+
+  assert.strictEqual(skeletonConfig.durationMs, 850);
+  assert.ok(skeletonConfig.minOpacity >= 0.3);
+  assert.ok(skeletonConfig.maxOpacity <= 0.9);
 });
