@@ -116,12 +116,18 @@ export const SelectedReportCard = memo(function SelectedReportCard({
       accessibilityRole="summary"
       accessibilityLabel={`Rincian Laporan: ${report.title}. Kategori ${categoryMeta.label}, Jarak: ${distanceFormatted}`}
     >
-      {/* Top Header: Simulation Flag & Close Button */}
+      {/* Top Header: Data Truthfulness Flag & Close Button */}
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
-          <View style={styles.simulationBadge}>
-            <Text style={styles.simulationBadgeText}>DATA SIMULASI</Text>
-          </View>
+          {report.isSimulation ? (
+            <View style={styles.simulationBadge}>
+              <Text style={styles.simulationBadgeText}>DATA SIMULASI</Text>
+            </View>
+          ) : (
+            <View style={styles.realDataBadge}>
+              <Text style={styles.realDataBadgeText}>SUPABASE DATA</Text>
+            </View>
+          )}
           <View style={[styles.categoryBadge, { backgroundColor: categoryMeta.bg }]}>
             <Text style={styles.categoryIcon}>{categoryMeta.icon}</Text>
             <Text style={[styles.categoryLabel, { color: categoryMeta.text }]}>
@@ -230,6 +236,20 @@ const styles = StyleSheet.create({
   },
   simulationBadgeText: {
     color: "#1D4ED8",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  realDataBadge: {
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  realDataBadgeText: {
+    color: "#059669",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.6,

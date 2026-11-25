@@ -147,6 +147,13 @@ export class ReportSearchService {
   }
 
   /**
+   * Mengambil snapshot hasil pencarian saat ini secara sinkron
+   */
+  getSnapshot(): SearchResultsState {
+    return this.resultsSubject.value;
+  }
+
+  /**
    * Memicu refresh ulang pencarian secara manual
    */
   refresh(): void {

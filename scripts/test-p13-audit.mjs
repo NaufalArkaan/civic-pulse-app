@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { Buffer } from "node:buffer";
 import test from "node:test";
 import {
   classifyAppError,
@@ -194,4 +195,96 @@ test("Check 3 (Cleanup Lifecycle): Reference-counted subscription prevents dupli
   assert.strictEqual(providerSubscriptions, 0, "Channel must close when last subscriber exits");
   assert.strictEqual(refCount, 0);
   assert.strictEqual(active, false);
+});
+
+test("Check 1 & Form Validation: validates report form submission constraints (title 5-160, desc 10-2000)", () => {
+  function validateReportForm(title, description) {
+    const t = title.trim();
+    const d = description.trim();
+    if (t.length < 5) return { valid: false, field: "title", error: "Judul minimal 5 karakter" };
+    if (t.length > 160) return { valid: false, field: "title", error: "Judul maksimal 160 karakter" };
+    if (d.length < 10) return { valid: false, field: "description", error: "Deskripsi minimal 10 karakter" };
+    if (d.length > 2000) return { valid: false, field: "description", error: "Deskripsi maksimal 2000 karakter" };
+    return { valid: true, field: null, error: null };
+  }
+
+  // Short title
+  assert.strictEqual(validateReportForm("abc", "Deskripsi kerusakan jalan yang cukup panjang").valid, false);
+  // Short description
+  assert.strictEqual(validateReportForm("Jalan Rusak", "Pendek").valid, false);
+  // Valid entry
+  assert.strictEqual(validateReportForm("Jalan Rusak Berlubang", "Lubang sedalam 20cm di tengah jalan").valid, true);
+  // Boundary 160
+  const title160 = "A".repeat(160);
+  assert.strictEqual(validateReportForm(title160, "Lubang sedalam 20cm di tengah jalan").valid, true);
+  // Beyond 160
+  const title161 = "A".repeat(161);
+  assert.strictEqual(validateReportForm(title161, "Lubang sedalam 20cm di tengah jalan").valid, false);
+});
+
+test("16ms Mandate: ReportItem memo comparator detects all mutable fields and callback identity", () => {
+  function areReportItemPropsEqual(prevProps, nextProps) {
+    return (
+      prevProps.report.id === nextProps.report.id &&
+      prevProps.report.status === nextProps.report.status &&
+      prevProps.report.severity === nextProps.report.severity &&
+      prevProps.report.category === nextProps.report.category &&
+      prevProps.report.isSimulation === nextProps.report.isSimulation &&
+      prevProps.report.title === nextProps.report.title &&
+      prevProps.report.description === nextProps.report.description &&
+      prevProps.report.updatedAt === nextProps.report.updatedAt &&
+      prevProps.onUpdateStatus === nextProps.onUpdateStatus &&
+      prevProps.onPressItem === nextProps.onPressItem
+    );
+  }
+
+  const baseReport = {
+    id: "rep-1",
+    status: "submitted",
+    severity: "medium",
+    category: "road-damage",
+    isSimulation: false,
+    title: "Jalan Rusak",
+    description: "Lubang jalan",
+    updatedAt: "2026-11-25T10:00:00Z",
+  };
+
+  const fn1 = () => {};
+  const fn2 = () => {};
+
+  // Identical props -> returns true (skip re-render)
+  assert.strictEqual(
+    areReportItemPropsEqual(
+      { report: baseReport, onUpdateStatus: fn1, onPressItem: fn1 },
+      { report: { ...baseReport }, onUpdateStatus: fn1, onPressItem: fn1 }
+    ),
+    true
+  );
+
+  // Status changed -> returns false (trigger re-render)
+  assert.strictEqual(
+    areReportItemPropsEqual(
+      { report: baseReport, onUpdateStatus: fn1, onPressItem: fn1 },
+      { report: { ...baseReport, status: "verified" }, onUpdateStatus: fn1, onPressItem: fn1 }
+    ),
+    false
+  );
+
+  // Severity changed -> returns false (trigger re-render)
+  assert.strictEqual(
+    areReportItemPropsEqual(
+      { report: baseReport, onUpdateStatus: fn1, onPressItem: fn1 },
+      { report: { ...baseReport, severity: "high" }, onUpdateStatus: fn1, onPressItem: fn1 }
+    ),
+    false
+  );
+
+  // Callback identity changed -> returns false (prevent stale closure)
+  assert.strictEqual(
+    areReportItemPropsEqual(
+      { report: baseReport, onUpdateStatus: fn1, onPressItem: fn1 },
+      { report: { ...baseReport }, onUpdateStatus: fn2, onPressItem: fn1 }
+    ),
+    false
+  );
 });

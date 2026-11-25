@@ -71,7 +71,7 @@ export const ReportMarker = memo(
       }
     }, [tracksViewChanges]);
 
-    const a11yLabel = `Laporan Simulasi: ${report.title}. Kategori ${categoryName}, Tingkat keparahan ${severityName}.${
+    const a11yLabel = `Laporan: ${report.title}. Kategori ${categoryName}, Tingkat keparahan ${severityName}.${
       isSelected ? " Saat ini sedang dipilih." : ""
     }`;
 
@@ -87,7 +87,7 @@ export const ReportMarker = memo(
         tracksViewChanges={tracksViewChanges}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
-        accessibilityHint="Ketuk untuk melihat detail laporan simulasi dan jarak garis lurus"
+        accessibilityHint="Ketuk untuk melihat detail laporan dan jarak garis lurus"
       >
         <View style={styles.touchTarget}>
           {/* Active selection pulse ring */}

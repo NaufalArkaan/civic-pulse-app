@@ -11,15 +11,15 @@
  * - Aksesibilitas penuh untuk screen reader (TalkBack & VoiceOver).
  */
 
-import React, { memo, useCallback } from "react";
+import { memo, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  ReduceMotion,
+    ReduceMotion,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from "react-native-reanimated";
-import { Report, ReportStatus, CivicReportCategory } from "../../types/report";
+import { CivicReportCategory, Report, ReportStatus } from "../../types/report";
 
 type ReportItemProps = {
   report: Report;
@@ -84,18 +84,26 @@ const SEVERITY_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export const ReportItem = memo(
-  function ReportItem({ report, onUpdateStatus, onPressItem }: ReportItemProps) {
+  function ReportItem({
+    report,
+    onUpdateStatus,
+    onPressItem,
+  }: ReportItemProps) {
     const icon = CATEGORY_ICONS[report.category] || "📍";
     const categoryName = CATEGORY_NAMES[report.category] || report.category;
     const statusInfo = STATUS_LABELS[report.status] || STATUS_LABELS.submitted;
-    const severityInfo = SEVERITY_LABELS[report.severity] || SEVERITY_LABELS.medium;
+    const severityInfo =
+      SEVERITY_LABELS[report.severity] || SEVERITY_LABELS.medium;
 
-    const formattedDate = new Date(report.createdAt).toLocaleDateString("id-ID", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const formattedDate = new Date(report.createdAt).toLocaleDateString(
+      "id-ID",
+      {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
 
     // Indikator laporan baru masuk (dibuat kurang dari 3 menit yang lalu)
     const isRecentlyCreated =
@@ -139,108 +147,120 @@ export const ReportItem = memo(
           accessibilityRole="button"
           accessibilityLabel={a11yLabel}
           accessibilityHint={
-            onPressItem ? "Ketuk untuk melihat detail lokasi dan laporan" : undefined
+            onPressItem
+              ? "Ketuk untuk melihat detail lokasi dan laporan"
+              : undefined
           }
         >
           {/* Top Header Row: Category Badge & Status Pill */}
-        <View style={styles.topRow}>
-          <View style={styles.badgeGroup}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryIcon}>{icon}</Text>
-              <Text style={styles.categoryName}>{categoryName}</Text>
+          <View style={styles.topRow}>
+            <View style={styles.badgeGroup}>
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryIcon}>{icon}</Text>
+                <Text style={styles.categoryName}>{categoryName}</Text>
+              </View>
+
+              {isRecentlyCreated && (
+                <View style={styles.liveBadge}>
+                  <Text style={styles.liveBadgeText}>⚡ Live Baru</Text>
+                </View>
+              )}
             </View>
 
-            {isRecentlyCreated && (
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>⚡ Live Baru</Text>
-              </View>
-            )}
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: statusInfo.bg,
+                  borderColor: statusInfo.borderColor,
+                },
+              ]}
+            >
+              <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                {statusInfo.label}
+              </Text>
+            </View>
           </View>
 
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: statusInfo.bg, borderColor: statusInfo.borderColor },
-            ]}
-          >
-            <Text style={[styles.statusText, { color: statusInfo.color }]}>
-              {statusInfo.label}
-            </Text>
-          </View>
-        </View>
+          {/* Title */}
+          <Text style={styles.title} numberOfLines={2}>
+            {report.title}
+          </Text>
 
-        {/* Title */}
-        <Text style={styles.title} numberOfLines={2}>
-          {report.title}
-        </Text>
+          {/* Description */}
+          <Text style={styles.description} numberOfLines={3}>
+            {report.description}
+          </Text>
 
-        {/* Description */}
-        <Text style={styles.description} numberOfLines={3}>
-          {report.description}
-        </Text>
-
-        {/* Metadata & Actions Footer */}
-        <View style={styles.footerRow}>
-          <View style={styles.metaLeft}>
-            <Text style={styles.timestamp}>📅 {formattedDate}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={[styles.severityText, { color: severityInfo.color }]}>
-              {severityInfo.label}
-            </Text>
-          </View>
-
-          {/* Quick Action Workflow Buttons */}
-          <View style={styles.actionGroup}>
-            {onUpdateStatus && report.status === "submitted" && (
-              <TouchableOpacity
-                style={styles.verifyBtn}
-                onPress={() => onUpdateStatus(report.id, "verified")}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Verifikasi laporan ini"
+          {/* Metadata & Actions Footer */}
+          <View style={styles.footerRow}>
+            <View style={styles.metaLeft}>
+              <Text style={styles.timestamp}>📅 {formattedDate}</Text>
+              <Text style={styles.metaDot}>•</Text>
+              <Text
+                style={[styles.severityText, { color: severityInfo.color }]}
               >
-                <Text style={styles.verifyBtnText}>✓ Verifikasi</Text>
-              </TouchableOpacity>
-            )}
+                {severityInfo.label}
+              </Text>
+            </View>
 
-            {onUpdateStatus && report.status === "verified" && (
-              <TouchableOpacity
-                style={styles.progressBtn}
-                onPress={() => onUpdateStatus(report.id, "in_progress")}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Tandai laporan sedang diproses petugas"
-              >
-                <Text style={styles.progressBtnText}>⚙️ Proses</Text>
-              </TouchableOpacity>
-            )}
+            {/* Quick Action Workflow Buttons */}
+            <View style={styles.actionGroup}>
+              {onUpdateStatus && report.status === "submitted" && (
+                <TouchableOpacity
+                  style={styles.verifyBtn}
+                  onPress={() => onUpdateStatus(report.id, "verified")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verifikasi laporan ini"
+                >
+                  <Text style={styles.verifyBtnText}>✓ Verifikasi</Text>
+                </TouchableOpacity>
+              )}
 
-            {onUpdateStatus && report.status === "in_progress" && (
-              <TouchableOpacity
-                style={styles.resolveBtn}
-                onPress={() => onUpdateStatus(report.id, "resolved")}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Tandai laporan telah selesai ditangani"
-              >
-                <Text style={styles.resolveBtnText}>✨ Selesai</Text>
-              </TouchableOpacity>
-            )}
+              {onUpdateStatus && report.status === "verified" && (
+                <TouchableOpacity
+                  style={styles.progressBtn}
+                  onPress={() => onUpdateStatus(report.id, "in_progress")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tandai laporan sedang diproses petugas"
+                >
+                  <Text style={styles.progressBtnText}>⚙️ Proses</Text>
+                </TouchableOpacity>
+              )}
+
+              {onUpdateStatus && report.status === "in_progress" && (
+                <TouchableOpacity
+                  style={styles.resolveBtn}
+                  onPress={() => onUpdateStatus(report.id, "resolved")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tandai laporan telah selesai ditangani"
+                >
+                  <Text style={styles.resolveBtnText}>✨ Selesai</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
+        </TouchableOpacity>
+      </Animated.View>
     );
   },
   (prevProps, nextProps) => {
     return (
       prevProps.report.id === nextProps.report.id &&
       prevProps.report.status === nextProps.report.status &&
+      prevProps.report.severity === nextProps.report.severity &&
+      prevProps.report.category === nextProps.report.category &&
+      prevProps.report.isSimulation === nextProps.report.isSimulation &&
       prevProps.report.title === nextProps.report.title &&
       prevProps.report.description === nextProps.report.description &&
-      prevProps.report.updatedAt === nextProps.report.updatedAt
+      prevProps.report.updatedAt === nextProps.report.updatedAt &&
+      prevProps.onUpdateStatus === nextProps.onUpdateStatus &&
+      prevProps.onPressItem === nextProps.onPressItem
     );
-  }
+  },
 );
 
 const styles = StyleSheet.create({

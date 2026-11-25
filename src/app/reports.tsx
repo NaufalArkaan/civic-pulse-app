@@ -33,6 +33,7 @@ import {
   ReportFilterBar,
   ReportSyncBanner,
   ReportList,
+  ReportCreateModal,
 } from "../components/reports";
 import { AnimatedPressable, FeedbackToast } from "../components/common";
 
@@ -43,6 +44,9 @@ export default function ReportsScreen() {
 
   // State untuk modal detail laporan
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+
+  // State untuk modal pembuatan laporan baru (Supabase Backed)
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState<boolean>(false);
 
   // State umpan balik mikro (Toast) dengan tipe jujur (success / error / info)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -65,6 +69,7 @@ export default function ReportsScreen() {
     setCategoryFilter,
     setStatusFilter,
     refresh,
+    createReport,
     updateReportStatus,
     processOutbox,
     simulateIncomingReport,
@@ -125,6 +130,38 @@ export default function ReportsScreen() {
       }
     },
     [updateReportStatus]
+  );
+
+  /**
+   * Pembuatan laporan baru secara jujur (Check 2 & Supabase Hardening):
+   * - Membedakan konfirmasi server vs antrean outbox offline vs kegagalan validasi.
+   */
+  const handleCreateReport = useCallback(
+    async (newReportData: Omit<Report, "id" | "createdAt" | "updatedAt">) => {
+      const res = await createReport(newReportData);
+
+      if (!res.success) {
+        setToastType("error");
+        setToastMessage(res.error || "Gagal mengirim laporan.");
+        return res;
+      }
+
+      if (res.syncOutcome === "queued_offline") {
+        setToastType("info");
+        setToastMessage(
+          "Disimpan di Outbox Offline (Laporan akan disinkronkan ke Supabase saat online)"
+        );
+      } else if (res.syncOutcome === "confirmed_remote") {
+        setToastType("success");
+        setToastMessage("Terkonfirmasi Server: Laporan baru berhasil dibuat di Supabase");
+      } else {
+        setToastType("success");
+        setToastMessage("Laporan baru berhasil disimpan");
+      }
+
+      return res;
+    },
+    [createReport]
   );
 
   // Komponen header virtualized list (Search, Filter, Sync Banner, Toast & Error)
@@ -230,15 +267,27 @@ export default function ReportsScreen() {
                 <Text style={styles.subtitle}>Real-Time Pipeline & RxJS Search</Text>
               </View>
 
-              <AnimatedPressable
-                style={styles.vaultButton}
-                onPress={() => router.push("/vault" as any)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Buka Document Vault"
-              >
-                <Text style={styles.vaultButtonText}>🔐 Vault</Text>
-              </AnimatedPressable>
+              <View style={styles.headerActionGroup}>
+                <AnimatedPressable
+                  style={styles.createReportButton}
+                  onPress={() => setIsCreateModalVisible(true)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Buat laporan insiden baru"
+                >
+                  <Text style={styles.createReportButtonText}>+ Lapor</Text>
+                </AnimatedPressable>
+
+                <AnimatedPressable
+                  style={styles.vaultButton}
+                  onPress={() => router.push("/vault" as any)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Buka Document Vault"
+                >
+                  <Text style={styles.vaultButtonText}>🔐 Vault</Text>
+                </AnimatedPressable>
+              </View>
             </View>
           </View>
 
@@ -329,6 +378,13 @@ export default function ReportsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Pembuatan Laporan Baru (Supabase & Offline Outbox) */}
+      <ReportCreateModal
+        visible={isCreateModalVisible}
+        onClose={() => setIsCreateModalVisible(false)}
+        onSubmit={handleCreateReport}
+      />
     </View>
   );
 }
@@ -385,12 +441,29 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: "500",
   },
+  headerActionGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  createReportButton: {
+    minHeight: 36,
+    paddingHorizontal: 11,
+    backgroundColor: "#0284C7",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createReportButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   vaultButton: {
     minHeight: 36,
     paddingHorizontal: 12,
     backgroundColor: "#334155",
     borderRadius: 8,
-    marginLeft: 8,
     alignItems: "center",
     justifyContent: "center",
   },

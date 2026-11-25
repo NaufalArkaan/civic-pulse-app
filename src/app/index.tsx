@@ -22,7 +22,6 @@ import { useLocationTracking } from "../hooks/useLocationTracking";
 import { haversineDistance } from "../utils/haversine";
 import { formatDistance } from "../utils/formatDistance";
 import { DEFAULT_FALLBACK_REGION, MAP_CONFIG } from "../constants/map";
-import { SAMPLE_CIVIC_REPORTS } from "../constants/sampleReports";
 import { DEFAULT_TRACKING_MODE } from "../constants/tracking";
 
 import {
@@ -41,15 +40,22 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const { centeredContainerStyle } = useResponsiveLayout();
 
-  // Sumber data domain terpadu untuk marker peta (tersinkronisasi dengan feed real-time)
-  const [mapReports, setMapReports] = useState<CivicReport[]>(SAMPLE_CIVIC_REPORTS);
+  // Sumber data domain terpadu untuk marker peta (tersinkronisasi dengan feed real-time Supabase & SQLite)
+  const [mapReports, setMapReports] = useState<CivicReport[]>(() => {
+    const cached = reportSearchService.getSnapshot().reports;
+    return cached && cached.length > 0 ? cached : [];
+  });
 
   useEffect(() => {
     const sub = reportSearchService.searchResults$.subscribe((state) => {
-      if (state.reports && state.reports.length > 0) {
-        setMapReports(state.reports);
-      }
+      setMapReports(state.reports || []);
     });
+
+    // Pemicu pemuatan awal jika pangkalan data belum tersinkronisasi
+    if (reportSearchService.getSnapshot().reports.length === 0) {
+      reportSearchService.refresh();
+    }
+
     return () => sub.unsubscribe();
   }, []);
 
