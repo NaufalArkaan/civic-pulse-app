@@ -32,11 +32,13 @@ import {
   SelectedReportCard,
 } from "../components/map";
 import { reportSearchService } from "../services/reports/reportSearchService";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const { centeredContainerStyle } = useResponsiveLayout();
 
   // Sumber data domain terpadu untuk marker peta (tersinkronisasi dengan feed real-time)
   const [mapReports, setMapReports] = useState<CivicReport[]>(SAMPLE_CIVIC_REPORTS);
@@ -169,7 +171,7 @@ export default function MapScreen() {
 
       {/* Top Floating Overlay: Kontrol Peta & Banner Status */}
       <View
-        style={[styles.topOverlayContainer, { paddingTop: topInsetPadding }]}
+        style={[styles.topOverlayContainer, { paddingTop: topInsetPadding }, centeredContainerStyle]}
         pointerEvents="box-none"
       >
         <View style={styles.topActionRow} pointerEvents="box-none">

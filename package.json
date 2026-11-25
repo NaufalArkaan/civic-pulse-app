@@ -51,7 +51,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --experimental-strip-types scripts/test-haversine.mjs && node --experimental-strip-types scripts/test-p10-security.mjs && node --experimental-strip-types scripts/test-p11-offline-sync.mjs && node --experimental-strip-types scripts/test-p11-reactive.mjs"
+    "test": "node --experimental-strip-types scripts/test-haversine.mjs && node --experimental-strip-types scripts/test-p10-security.mjs && node --experimental-strip-types scripts/test-p11-offline-sync.mjs && node --experimental-strip-types scripts/test-p11-reactive.mjs && node --experimental-strip-types scripts/test-p12-responsive.mjs"
   },
   "private": true
 }

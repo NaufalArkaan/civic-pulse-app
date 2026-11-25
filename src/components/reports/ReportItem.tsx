@@ -11,8 +11,14 @@
  * - Aksesibilitas penuh untuk screen reader (TalkBack & VoiceOver).
  */
 
-import React, { memo } from "react";
+import React, { memo, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  ReduceMotion,
+} from "react-native-reanimated";
 import { Report, ReportStatus, CivicReportCategory } from "../../types/report";
 
 type ReportItemProps = {
@@ -99,18 +105,44 @@ export const ReportItem = memo(
       statusInfo.label
     }. Tingkat: ${severityInfo.label}. Waktu: ${formattedDate}.`;
 
+    // Reanimated Shared Value untuk micro-interaction press feedback
+    const scale = useSharedValue(1);
+
+    const handlePressIn = useCallback(() => {
+      scale.value = withSpring(0.98, {
+        damping: 15,
+        stiffness: 250,
+        reduceMotion: ReduceMotion.System,
+      });
+    }, [scale]);
+
+    const handlePressOut = useCallback(() => {
+      scale.value = withSpring(1, {
+        damping: 15,
+        stiffness: 250,
+        reduceMotion: ReduceMotion.System,
+      });
+    }, [scale]);
+
+    const animatedCardStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: scale.value }],
+    }));
+
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => onPressItem?.(report)}
-        activeOpacity={onPressItem ? 0.7 : 1}
-        accessibilityRole="button"
-        accessibilityLabel={a11yLabel}
-        accessibilityHint={
-          onPressItem ? "Ketuk untuk melihat detail lokasi dan laporan" : undefined
-        }
-      >
-        {/* Top Header Row: Category Badge & Status Pill */}
+      <Animated.View style={animatedCardStyle}>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => onPressItem?.(report)}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={onPressItem ? 0.7 : 1}
+          accessibilityRole="button"
+          accessibilityLabel={a11yLabel}
+          accessibilityHint={
+            onPressItem ? "Ketuk untuk melihat detail lokasi dan laporan" : undefined
+          }
+        >
+          {/* Top Header Row: Category Badge & Status Pill */}
         <View style={styles.topRow}>
           <View style={styles.badgeGroup}>
             <View style={styles.categoryBadge}>
@@ -197,6 +229,7 @@ export const ReportItem = memo(
           </View>
         </View>
       </TouchableOpacity>
+    </Animated.View>
     );
   },
   (prevProps, nextProps) => {

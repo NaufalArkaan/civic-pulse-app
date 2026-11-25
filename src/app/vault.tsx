@@ -33,10 +33,12 @@ import {
   VaultFilePreviewModal,
   VaultJitModal,
 } from "../components/vault";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { centeredContainerStyle } = useResponsiveLayout();
 
   // State untuk Pratinjau Berkas
   const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
@@ -147,70 +149,72 @@ Catatan Keamanan: Berkas ini disimpan di direktori privat tanpa ekspos publik.`;
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="light" />
 
-      {/* Header Bar dengan Ringkasan Metrik */}
-      <VaultHeader
-        onBack={handleBackToMap}
-        onRefresh={refreshFiles}
-        isRefreshing={loading}
-        totalFiles={files.length}
-        totalSizeBytes={totalSizeBytes}
-      />
+      <View style={[styles.contentWrapper, centeredContainerStyle]}>
+        {/* Header Bar dengan Ringkasan Metrik */}
+        <VaultHeader
+          onBack={handleBackToMap}
+          onRefresh={refreshFiles}
+          isRefreshing={loading}
+          totalFiles={files.length}
+          totalSizeBytes={totalSizeBytes}
+        />
 
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refreshFiles}
-            tintColor="#208AEF"
-            colors={["#208AEF"]}
-          />
-        }
-      >
-        {/* Success Feedback Toast */}
-        {successMessage && (
-          <View style={styles.successBanner}>
-            <Text style={styles.successText}>✅ {successMessage}</Text>
-            <TouchableOpacity onPress={() => setSuccessMessage(null)}>
-              <Text style={styles.bannerCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={refreshFiles}
+              tintColor="#208AEF"
+              colors={["#208AEF"]}
+            />
+          }
+        >
+          {/* Success Feedback Toast */}
+          {successMessage && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successText}>✅ {successMessage}</Text>
+              <TouchableOpacity onPress={() => setSuccessMessage(null)}>
+                <Text style={styles.bannerCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-        {/* Error banner jika ada kegagalan operasi berkas */}
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
-          </View>
-        )}
+          {/* Error banner jika ada kegagalan operasi berkas */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>⚠️ {error}</Text>
+            </View>
+          )}
 
-        {/* Deliverable 1: Integrasi expo-secure-store (Hardware Keystore) */}
-        <SecureStoreCard />
+          {/* Deliverable 1: Integrasi expo-secure-store (Hardware Keystore) */}
+          <SecureStoreCard />
 
-        {/* Deliverable 2: Integrasi expo-file-system (Scoped Storage Sandbox) */}
-        {files.length === 0 && !loading ? (
-          <VaultEmptyState
-            onImportDocument={handleTriggerImport}
-            onCreateDemoReport={handleCreateDemoReport}
-            isImporting={isImporting}
-          />
-        ) : (
-          <VaultFileList
-            files={files}
-            onOpenFile={handleOpenFile}
-            onDeleteFile={handleDeleteFile}
-            onImportDocument={handleTriggerImport}
-            onCreateDemoReport={handleCreateDemoReport}
-            isImporting={isImporting}
-          />
-        )}
+          {/* Deliverable 2: Integrasi expo-file-system (Scoped Storage Sandbox) */}
+          {files.length === 0 && !loading ? (
+            <VaultEmptyState
+              onImportDocument={handleTriggerImport}
+              onCreateDemoReport={handleCreateDemoReport}
+              isImporting={isImporting}
+            />
+          ) : (
+            <VaultFileList
+              files={files}
+              onOpenFile={handleOpenFile}
+              onDeleteFile={handleDeleteFile}
+              onImportDocument={handleTriggerImport}
+              onCreateDemoReport={handleCreateDemoReport}
+              isImporting={isImporting}
+            />
+          )}
 
-        {/* Deliverable 3: Edukasi Just-In-Time Runtime Permission & Scoped Storage */}
-        <VaultPermissionNotice />
+          {/* Deliverable 3: Edukasi Just-In-Time Runtime Permission & Scoped Storage */}
+          <VaultPermissionNotice />
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </View>
 
       {/* Modal Pratinjau Berkas */}
       <VaultFilePreviewModal
@@ -235,6 +239,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0F172A",
+  },
+  contentWrapper: {
+    flex: 1,
   },
   scrollArea: {
     flex: 1,

@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { Report, ReportStatus } from "../../types/report";
 import { ReportItem } from "./ReportItem";
+import { ReportSkeletonList } from "./ReportSkeleton";
 
 type ReportListProps = {
   reports: Report[];
@@ -54,7 +55,12 @@ export const ReportList = memo(function ReportList({
 
   const keyExtractor = useCallback((item: Report) => item.id, []);
 
-  // Empty State
+  // Initial Loading State: Tampilkan skeleton saat belum ada data sama sekali
+  if (reports.length === 0 && loading) {
+    return <ReportSkeletonList />;
+  }
+
+  // Empty State: Hanya ketika selesai loading dan hasil memang 0
   if (reports.length === 0 && !loading) {
     return (
       <View style={styles.emptyContainer}>

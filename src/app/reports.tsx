@@ -18,6 +18,8 @@ import {
   Text,
   TouchableOpacity,
   Modal,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +27,8 @@ import { useRouter } from "expo-router";
 
 import { Report } from "../types/report";
 import { useReportSearch } from "../hooks/useReportSearch";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { LAYOUT_CONSTRAINTS } from "../constants/breakpoints";
 import {
   ReportSearchBar,
   ReportFilterBar,
@@ -35,6 +39,7 @@ import {
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { centeredContainerStyle } = useResponsiveLayout();
 
   // State untuk modal detail laporan
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -77,96 +82,104 @@ export default function ReportsScreen() {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="light" />
 
-      {/* Top Header Bar */}
-      <View style={styles.header}>
-        <View style={styles.topRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBackToMap}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Kembali ke peta interaktif"
-          >
-            <Text style={styles.backButtonText}>← Peta</Text>
-          </TouchableOpacity>
-
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Laporan & Mitigasi</Text>
-            <Text style={styles.subtitle}>Real-Time Pipeline & RxJS Search</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.vaultButton}
-            onPress={() => router.push("/vault" as any)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Buka Document Vault"
-          >
-            <Text style={styles.vaultButtonText}>🔐 Vault</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Network Connectivity & Realtime Outbox Banner */}
-      <ReportSyncBanner
-        networkState={networkState}
-        syncState={syncState}
-        onSimulateRealtime={simulateIncomingReport}
-        onProcessOutbox={processOutbox}
-      />
-
-      {/* Reactive Search Bar */}
-      <ReportSearchBar
-        value={criteria.query}
-        onChangeText={setSearchQuery}
-        loading={loading}
-        resultCount={reports.length}
-      />
-
-      {/* Category & Status Filter Chips */}
-      <ReportFilterBar
-        selectedCategory={criteria.category || "all"}
-        onSelectCategory={setCategoryFilter}
-        selectedStatus={criteria.status || "all"}
-        onSelectStatus={setStatusFilter}
-        onResetFilters={handleResetFilters}
-      />
-
-      {/* Reports Scrollable Feed */}
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refresh}
-            tintColor="#208AEF"
-            colors={["#208AEF"]}
-          />
-        }
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Error Alert with Retry Action */}
-        {error && (
-          <View style={styles.errorBanner}>
-            <View style={styles.errorContent}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
-            </View>
-            <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-              <Text style={styles.retryButtonText}>Coba Lagi</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={[styles.contentWrapper, centeredContainerStyle]}>
+          {/* Top Header Bar */}
+          <View style={styles.header}>
+            <View style={styles.topRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleBackToMap}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Kembali ke peta interaktif"
+              >
+                <Text style={styles.backButtonText}>← Peta</Text>
+              </TouchableOpacity>
 
-        {/* Virtualized Report Feed */}
-        <ReportList
-          reports={reports}
-          loading={loading}
-          isFromCache={isFromCache}
-          onUpdateStatus={updateReportStatus}
-          onPressItem={setSelectedReport}
-          onResetFilters={handleResetFilters}
-        />
-      </ScrollView>
+              <View style={styles.titleContainer}>
+                <Text style={styles.title}>Laporan & Mitigasi</Text>
+                <Text style={styles.subtitle}>Real-Time Pipeline & RxJS Search</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.vaultButton}
+                onPress={() => router.push("/vault" as any)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Buka Document Vault"
+              >
+                <Text style={styles.vaultButtonText}>🔐 Vault</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Network Connectivity & Realtime Outbox Banner */}
+          <ReportSyncBanner
+            networkState={networkState}
+            syncState={syncState}
+            onSimulateRealtime={simulateIncomingReport}
+            onProcessOutbox={processOutbox}
+          />
+
+          {/* Reactive Search Bar */}
+          <ReportSearchBar
+            value={criteria.query}
+            onChangeText={setSearchQuery}
+            loading={loading}
+            resultCount={reports.length}
+          />
+
+          {/* Category & Status Filter Chips */}
+          <ReportFilterBar
+            selectedCategory={criteria.category || "all"}
+            onSelectCategory={setCategoryFilter}
+            selectedStatus={criteria.status || "all"}
+            onSelectStatus={setStatusFilter}
+            onResetFilters={handleResetFilters}
+          />
+
+          {/* Reports Scrollable Feed */}
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refresh}
+                tintColor="#208AEF"
+                colors={["#208AEF"]}
+              />
+            }
+          >
+            {/* Error Alert with Retry Action */}
+            {error && (
+              <View style={styles.errorBanner}>
+                <View style={styles.errorContent}>
+                  <Text style={styles.errorText}>⚠️ {error}</Text>
+                </View>
+                <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+                  <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Virtualized Report Feed */}
+            <ReportList
+              reports={reports}
+              loading={loading}
+              isFromCache={isFromCache}
+              onUpdateStatus={updateReportStatus}
+              onPressItem={setSelectedReport}
+              onResetFilters={handleResetFilters}
+            />
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
 
       {/* Detail Modal Pop-up */}
       <Modal
@@ -233,6 +246,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0F172A",
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  contentWrapper: {
+    flex: 1,
   },
   header: {
     backgroundColor: "#1E293B",
@@ -342,7 +361,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     width: "100%",
-    maxWidth: 380,
+    maxWidth: LAYOUT_CONSTRAINTS.maxModalWidth,
     maxHeight: "80%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },

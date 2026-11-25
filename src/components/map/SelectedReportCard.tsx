@@ -11,10 +11,17 @@
  * - Desain card modern, kontras tinggi, dan aksesibilitas lengkap (WCAG AA).
  */
 
-import React, { memo } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { memo, useEffect } from "react";
+import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  ReduceMotion,
+} from "react-native-reanimated";
 import { SelectedReportCardProps } from "../../types/components";
 import { CivicReportCategory, CivicReportSeverity } from "../../types/report";
+import { LAYOUT_CONSTRAINTS } from "../../constants/breakpoints";
 
 const CATEGORY_META: Record<
   CivicReportCategory,
@@ -75,11 +82,37 @@ export const SelectedReportCard = memo(function SelectedReportCard({
     bg: "#F1F5F9",
   };
 
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.min(width - 32, LAYOUT_CONSTRAINTS.maxCardWidth);
+  const leftOffset = (width - cardWidth) / 2;
   const bottomPosition = (insets?.bottom ?? 0) > 0 ? insets!.bottom + 12 : 20;
 
+  // Reanimated slide-up entrance animation
+  const translateY = useSharedValue(80);
+
+  useEffect(() => {
+    translateY.value = withSpring(0, {
+      damping: 18,
+      stiffness: 160,
+      reduceMotion: ReduceMotion.System,
+    });
+  }, [translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   return (
-    <View
-      style={[styles.cardContainer, { bottom: bottomPosition }]}
+    <Animated.View
+      style={[
+        styles.cardContainer,
+        {
+          width: cardWidth,
+          left: leftOffset,
+          bottom: bottomPosition,
+        },
+        animatedStyle,
+      ]}
       accessibilityRole="summary"
       accessibilityLabel={`Rincian Laporan: ${report.title}. Kategori ${categoryMeta.label}, Jarak: ${distanceFormatted}`}
     >
@@ -156,15 +189,13 @@ export const SelectedReportCard = memo(function SelectedReportCard({
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 });
 
 const styles = StyleSheet.create({
   cardContainer: {
     position: "absolute",
-    left: 16,
-    right: 16,
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 16,
