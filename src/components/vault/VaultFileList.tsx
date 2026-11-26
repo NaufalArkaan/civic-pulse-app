@@ -1,13 +1,7 @@
 /**
- * Civic Pulse - Pertemuan 10
+ * Civic Pulse - Pertemuan 10–13
  * Component: VaultFileList
  * Role: Anggota 2 (Lead Frontend & Performance Specialist)
- *
- * Performance Safeguards:
- * - Menggunakan `FlatList` virtualized rendering untuk efisiensi memori ketika jumlah dokumen bertambah banyak.
- * - Key stabil berbasis ID unik berkas (`item.id`).
- * - Memoized `renderItem` untuk mencegah instansiasi fungsi baru pada setiap render.
- * - Desain header list informatif dengan tombol aksi penambahan berkas.
  */
 
 import React, { memo, useCallback } from "react";
@@ -29,6 +23,8 @@ export const VaultFileList = memo(function VaultFileList({
   onOpenFile,
   onDeleteFile,
   onImportDocument,
+  onImportImage,
+  onTakePhoto,
   onCreateDemoReport,
   isImporting,
 }: VaultFileListProps) {
@@ -48,10 +44,10 @@ export const VaultFileList = memo(function VaultFileList({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <View>
+        <View style={styles.headerTitleBox}>
           <Text style={styles.sectionTitle}>Berkas Tersimpan</Text>
           <Text style={styles.fileCount}>
-            {files.length} dokumen dalam Scoped Storage
+            {files.length} berkas dalam Scoped Storage (Maks 150 MB/file)
           </Text>
         </View>
 
@@ -61,35 +57,56 @@ export const VaultFileList = memo(function VaultFileList({
             onPress={onImportDocument}
             disabled={isImporting}
             accessibilityRole="button"
-            accessibilityLabel="Impor berkas dari perangkat"
-            accessibilityHint="Membuka pemilih berkas sistem untuk menyalin dokumen ke vault"
+            accessibilityLabel="Impor dokumen dari perangkat"
           >
             {isImporting ? (
-              <ActivityIndicator size="small" color="#208AEF" />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.smallBtnText}>+ Impor File</Text>
+              <Text style={styles.smallBtnText}>+ Dokumen</Text>
             )}
           </TouchableOpacity>
+
+          {onTakePhoto && (
+            <TouchableOpacity
+              style={[styles.smallBtn, { backgroundColor: "#15803D" }, isImporting && styles.btnDisabled]}
+              onPress={onTakePhoto}
+              disabled={isImporting}
+              accessibilityRole="button"
+              accessibilityLabel="Ambil foto langsung dengan kamera"
+            >
+              <Text style={styles.smallBtnText}>+ Kamera</Text>
+            </TouchableOpacity>
+          )}
+
+          {onImportImage && (
+            <TouchableOpacity
+              style={[styles.smallBtnImage, isImporting && styles.btnDisabled]}
+              onPress={onImportImage}
+              disabled={isImporting}
+              accessibilityRole="button"
+              accessibilityLabel="Impor foto atau gambar dari galeri"
+            >
+              <Text style={styles.smallBtnImageText}>+ Galeri</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.smallBtnSecondary, isImporting && styles.btnDisabled]}
             onPress={onCreateDemoReport}
             disabled={isImporting}
             accessibilityRole="button"
-            accessibilityLabel="Buat dokumen laporan simulasi offline"
-            accessibilityHint="Membuat berkas teks laporan mitigasi bencana simulasi di sandbox"
+            accessibilityLabel="Buat dokumen laporan baru"
           >
-            <Text style={styles.smallBtnSecondaryText}>+ Simulasi</Text>
+            <Text style={styles.smallBtnSecondaryText}>+ Buat</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Virtualized FlatList for High Performance */}
       <FlatList
         data={files}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        scrollEnabled={false} // Dikontrol oleh parent ScrollView
+        scrollEnabled={false}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
@@ -109,6 +126,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+    gap: 8,
+  },
+  headerTitleBox: {
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 15,
@@ -123,6 +144,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     gap: 8,
+    flexShrink: 0,
   },
   smallBtn: {
     backgroundColor: "#EFF6FF",
@@ -139,6 +161,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1E40AF",
   },
+  smallBtnImage: {
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    minHeight: 36,
+    justifyContent: "center",
+  },
+  smallBtnImageText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#166534",
+  },
   smallBtnSecondary: {
     backgroundColor: "#F8FAFC",
     paddingHorizontal: 10,
@@ -151,8 +188,8 @@ const styles = StyleSheet.create({
   },
   smallBtnSecondaryText: {
     fontSize: 11.5,
-    fontWeight: "600",
-    color: "#475569",
+    fontWeight: "700",
+    color: "#334155",
   },
   btnDisabled: {
     opacity: 0.5,

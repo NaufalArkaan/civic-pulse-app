@@ -75,8 +75,12 @@ test("Validation: Configurable file size limits and structured entry validation"
   assert.strictEqual(validDoc.category, "photo");
   assert.strictEqual(validDoc.sanitizedName, "bukti_longsor.jpg");
 
-  // Full entry validation: oversize file
-  const oversizeDoc = validateFileEntry("laporan_jumbo.pdf", "application/pdf", 15 * 1024 * 1024);
+  // Full entry validation: oversize file (> MAX_FILE_SIZE_BYTES)
+  const oversizeDoc = validateFileEntry(
+    "laporan_jumbo.pdf",
+    "application/pdf",
+    MAX_FILE_SIZE_BYTES + 5 * 1024 * 1024
+  );
   assert.strictEqual(oversizeDoc.valid, false);
   assert.ok(oversizeDoc.error?.includes("melebihi batas maksimum"));
 

@@ -10,13 +10,16 @@
  * - Konfirmasi penghapusan eksplisit dengan peringatan yang jelas sebelum menghapus.
  */
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import { StyleSheet, Text, View, Alert } from "react-native";
+import { Image } from "expo-image";
 import { VaultFileItemProps } from "../../types/components";
 import { AnimatedPressable } from "../common/AnimatedPressable";
+import { normalizeLocalFileUri } from "../../utils/reportMedia";
 
 export const VaultFileItem = memo(
   function VaultFileItem({ item, onOpen, onDelete }: VaultFileItemProps) {
+    const [thumbError, setThumbError] = useState(false);
     const icon =
       item.category === "photo" ? "📷" : item.category === "document" ? "📄" : "📁";
 
@@ -64,7 +67,17 @@ export const VaultFileItem = memo(
         accessibilityHint="Ketuk untuk melihat rincian dan pratinjau dokumen"
       >
         <View style={styles.iconBox}>
-          <Text style={styles.iconText}>{icon}</Text>
+          {item.category === "photo" && !item.isMissing && !thumbError ? (
+            <Image
+              source={{ uri: normalizeLocalFileUri(item.localUri) || item.localUri }}
+              style={styles.thumbnailImage}
+              contentFit="cover"
+              transition={150}
+              onError={() => setThumbError(true)}
+            />
+          ) : (
+            <Text style={styles.iconText}>{icon}</Text>
+          )}
         </View>
 
         <View style={styles.infoBox}>
@@ -148,6 +161,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  thumbnailImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 10,
   },
   iconText: {
     fontSize: 22,

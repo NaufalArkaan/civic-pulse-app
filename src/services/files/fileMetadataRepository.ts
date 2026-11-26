@@ -14,10 +14,16 @@ import { VaultFile, VaultMetadataManifest } from "../../types/vault";
 const METADATA_VERSION = 1;
 
 export class FileMetadataRepository {
-  private manifestPath: string;
+  private vaultDirResolver: () => string;
 
-  constructor(vaultDirPath: string) {
-    this.manifestPath = `${vaultDirPath}metadata.json`;
+  constructor(vaultDir: string | (() => string)) {
+    this.vaultDirResolver = typeof vaultDir === "function" ? vaultDir : () => vaultDir;
+  }
+
+  private get manifestPath(): string {
+    const dir = this.vaultDirResolver();
+    const cleanDir = dir.endsWith("/") ? dir : `${dir}/`;
+    return `${cleanDir}metadata.json`;
   }
 
   /**

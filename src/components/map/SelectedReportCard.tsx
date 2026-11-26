@@ -11,8 +11,18 @@
  * - Desain card modern, kontras tinggi, dan aksesibilitas lengkap (WCAG AA).
  */
 
-import React, { memo, useEffect } from "react";
-import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import React, { memo, useEffect, useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Modal,
+  useWindowDimensions,
+  Alert,
+} from "react-native";
+import { Image } from "expo-image";
+import * as Sharing from "expo-sharing";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -22,6 +32,13 @@ import Animated, {
 import { SelectedReportCardProps } from "../../types/components";
 import { CivicReportCategory, CivicReportSeverity } from "../../types/report";
 import { LAYOUT_CONSTRAINTS } from "../../constants/breakpoints";
+import {
+  getReportPhotoUri,
+  isReportUsingVaultMedia,
+  isReportDocumentMedia,
+  getReportMediaFilename,
+  DISASTER_CATEGORY_PHOTOS,
+} from "../../utils/reportMedia";
 
 const CATEGORY_META: Record<
   CivicReportCategory,
@@ -87,6 +104,33 @@ export const SelectedReportCard = memo(function SelectedReportCard({
   const leftOffset = (width - cardWidth) / 2;
   const bottomPosition = (insets?.bottom ?? 0) > 0 ? insets!.bottom + 12 : 20;
 
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState<boolean>(false);
+  const [imageError, setImageError] = useState<boolean>(false);
+  const photoUri = getReportPhotoUri(report);
+  const activePhotoUri = imageError
+    ? DISASTER_CATEGORY_PHOTOS[report.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
+    : photoUri;
+  const isDocument = isReportDocumentMedia(report);
+  const isVaultMedia = isReportUsingVaultMedia(report);
+  const mediaFilename = getReportMediaFilename(report);
+
+  const handleOpenDocument = async () => {
+    if (!report.mediaPath) return;
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert("Fitur Berbagi", "Sistem operasi tidak mendukung pembukaan berkas.");
+        return;
+      }
+      await Sharing.shareAsync(report.mediaPath, {
+        dialogTitle: `Buka Dokumen Bukti ${report.title}`,
+        UTI: "public.composite-content",
+      });
+    } catch (err: any) {
+      Alert.alert("Gagal Membuka Berkas", err?.message || "Tidak dapat membuka dokumen.");
+    }
+  };
+
   // Reanimated slide-up entrance animation
   const translateY = useSharedValue(80);
 
@@ -119,15 +163,9 @@ export const SelectedReportCard = memo(function SelectedReportCard({
       {/* Top Header: Data Truthfulness Flag & Close Button */}
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
-          {report.isSimulation ? (
-            <View style={styles.simulationBadge}>
-              <Text style={styles.simulationBadgeText}>DATA SIMULASI</Text>
-            </View>
-          ) : (
-            <View style={styles.realDataBadge}>
-              <Text style={styles.realDataBadgeText}>SUPABASE DATA</Text>
-            </View>
-          )}
+          <View style={styles.realDataBadge}>
+            <Text style={styles.realDataBadgeText}>LAPORAN RESMI</Text>
+          </View>
           <View style={[styles.categoryBadge, { backgroundColor: categoryMeta.bg }]}>
             <Text style={styles.categoryIcon}>{categoryMeta.icon}</Text>
             <Text style={[styles.categoryLabel, { color: categoryMeta.text }]}>
@@ -178,9 +216,65 @@ export const SelectedReportCard = memo(function SelectedReportCard({
       </View>
 
       {/* Description */}
-      <Text style={styles.description} numberOfLines={3}>
+      <Text style={styles.description} numberOfLines={2}>
         {report.description}
       </Text>
+
+      {/* Evidence Section: Real Document Card or Photo with Tap-to-Enlarge */}
+      {isDocument ? (
+        <View style={styles.docAttachmentCard}>
+          <View style={styles.docAttachmentLeft}>
+            <Text style={styles.docAttachmentIcon}>📄</Text>
+            <View style={styles.docAttachmentTextBox}>
+              <Text style={styles.docAttachmentTitle} numberOfLines={1}>
+                {mediaFilename || "Dokumen Mitigasi Lapangan"}
+              </Text>
+              <Text style={styles.docAttachmentBadge}>
+                🔒 Lampiran Dokumen Asli (Document Vault)
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.docAttachmentOpenBtn}
+            onPress={handleOpenDocument}
+            accessibilityRole="button"
+            accessibilityLabel="Ekspor atau bagikan dokumen bukti"
+          >
+            <Text style={styles.docAttachmentOpenBtnText}>📤 Ekspor / Bagikan PDF</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.photoContainer}
+          onPress={() => setIsPhotoModalVisible(true)}
+          activeOpacity={0.88}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="Foto bukti bencana atau kerusakan. Ketuk untuk memperbesar."
+        >
+          <Image
+            source={{ uri: activePhotoUri }}
+            style={styles.disasterPhoto}
+            contentFit="cover"
+            transition={150}
+            onError={() => setImageError(true)}
+          />
+          <View
+            style={[
+              styles.photoOverlayBadge,
+              isVaultMedia && styles.photoOverlayBadgeVault,
+            ]}
+          >
+            <Text style={styles.photoOverlayBadgeText}>
+              {isVaultMedia
+                ? `🔒 Bukti Foto Asli Warga (Vault) • ${mediaFilename}`
+                : "📸 Foto Dokumentasi Lapangan (SDG 11)"}
+            </Text>
+          </View>
+          <View style={styles.photoZoomTag}>
+            <Text style={styles.photoZoomTagText}>🔍 Ketuk Perbesar</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Action Footer: Focus on Point */}
       {onFocusReport && (
@@ -195,6 +289,49 @@ export const SelectedReportCard = memo(function SelectedReportCard({
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Full-Screen Disaster Photo Modal */}
+      <Modal
+        visible={isPhotoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsPhotoModalVisible(false)}
+      >
+        <View style={styles.photoModalBackdrop}>
+          <View style={styles.photoModalHeader}>
+            <View style={styles.photoModalTitleBox}>
+              <Text style={styles.photoModalTitle} numberOfLines={1}>
+                {report.title}
+              </Text>
+              <Text style={styles.photoModalSubtitle}>
+                {categoryMeta.label} • {distanceFormatted}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.photoModalCloseBtn}
+              onPress={() => setIsPhotoModalVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Tutup pratinjau foto"
+            >
+              <Text style={styles.photoModalCloseBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Image
+            source={{ uri: activePhotoUri }}
+            style={styles.photoModalFullImage}
+            contentFit="contain"
+            transition={200}
+            onError={() => setImageError(true)}
+          />
+
+          <View style={styles.photoModalFooter}>
+            <Text style={styles.photoModalCaption}>
+              {report.description}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 });
@@ -368,5 +505,150 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#166534",
+  },
+  photoContainer: {
+    marginTop: 10,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+  },
+  disasterPhoto: {
+    width: "100%",
+    height: 125,
+  },
+  photoOverlayBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  photoOverlayBadgeVault: {
+    backgroundColor: "rgba(22, 101, 52, 0.88)",
+  },
+  photoOverlayBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  docAttachmentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+  },
+  docAttachmentLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
+  docAttachmentIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  docAttachmentTextBox: {
+    flex: 1,
+  },
+  docAttachmentTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  docAttachmentBadge: {
+    fontSize: 10,
+    color: "#15803D",
+    marginTop: 1,
+  },
+  docAttachmentOpenBtn: {
+    backgroundColor: "#166534",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  docAttachmentOpenBtnText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  photoZoomTag: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(32, 138, 239, 0.85)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  photoZoomTagText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  photoModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    justifyContent: "space-between",
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 16,
+  },
+  photoModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  photoModalTitleBox: {
+    flex: 1,
+    marginRight: 12,
+  },
+  photoModalTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  photoModalSubtitle: {
+    color: "#94A3B8",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  photoModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoModalCloseBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  photoModalFullImage: {
+    width: "100%",
+    flex: 1,
+  },
+  photoModalFooter: {
+    backgroundColor: "rgba(30, 41, 59, 0.85)",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+  },
+  photoModalCaption: {
+    color: "#E2E8F0",
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 });

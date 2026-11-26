@@ -1,12 +1,7 @@
 /**
- * Civic Pulse - Pertemuan 10
+ * Civic Pulse - Pertemuan 10–13
  * Component: VaultEmptyState
  * Role: Anggota 2 (Lead Frontend & Performance Specialist)
- *
- * Visual & Empty State Presentation:
- * - Menjelaskan kepada pengguna bahwa belum ada dokumen yang disimpan di sandbox privat.
- * - Menyediakan tombol aksi utama untuk mengimpor berkas atau membuat dokumen simulasi offline.
- * - Touch target ramah aksesibilitas (>= 44 dp).
  */
 
 import React, { memo } from "react";
@@ -15,6 +10,8 @@ import { VaultEmptyStateProps } from "../../types/components";
 
 export const VaultEmptyState = memo(function VaultEmptyState({
   onImportDocument,
+  onImportImage,
+  onTakePhoto,
   onCreateDemoReport,
   isImporting,
 }: VaultEmptyStateProps) {
@@ -25,8 +22,8 @@ export const VaultEmptyState = memo(function VaultEmptyState({
       </View>
       <Text style={styles.title}>Belum Ada Dokumen di Vault</Text>
       <Text style={styles.description}>
-        Document Vault menyimpan foto bukti insiden dan laporan mitigasi bencana langsung di
-        sandbox privat perangkat (Scoped Storage). Data tidak diunggah ke cloud.
+        Document Vault menyimpan berkas bukti berkapasitas besar (Foto High-Res, PDF, Video, ZIP hingga
+        150 MB) di direktori privat perangkat (Scoped Storage).
       </Text>
 
       <View style={styles.buttonContainer}>
@@ -35,24 +32,50 @@ export const VaultEmptyState = memo(function VaultEmptyState({
           onPress={onImportDocument}
           disabled={isImporting}
           accessibilityRole="button"
-          accessibilityLabel="Pilih dokumen dari perangkat"
-          accessibilityHint="Membuka pemilih berkas sistem untuk menyalin dokumen ke sandbox privat"
+          accessibilityLabel="Impor berkas dokumen dari perangkat"
         >
           <Text style={styles.primaryButtonText}>
-            {isImporting ? "Sedang Mengimpor..." : "📁 Pilih Dokumen Perangkat"}
+            {isImporting ? "Sedang Memproses..." : "📁 Impor Dokumen (PDF, ZIP, dll)"}
           </Text>
         </TouchableOpacity>
+
+        {onTakePhoto && (
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: "#15803D" }, isImporting && styles.disabledButton]}
+            onPress={onTakePhoto}
+            disabled={isImporting}
+            accessibilityRole="button"
+            accessibilityLabel="Ambil foto bukti langsung menggunakan kamera"
+          >
+            <Text style={styles.primaryButtonText}>
+              {isImporting ? "Sedang Memproses..." : "📸 Ambil Foto Kamera Langsung"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {onImportImage && (
+          <TouchableOpacity
+            style={[styles.imageButton, isImporting && styles.disabledButton]}
+            onPress={onImportImage}
+            disabled={isImporting}
+            accessibilityRole="button"
+            accessibilityLabel="Impor foto atau gambar dari galeri"
+          >
+            <Text style={styles.imageButtonText}>
+              🖼️ Impor Foto dari Galeri
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.secondaryButton, isImporting && styles.disabledButton]}
           onPress={onCreateDemoReport}
           disabled={isImporting}
           accessibilityRole="button"
-          accessibilityLabel="Buat dokumen simulasi mitigasi bencana offline"
-          accessibilityHint="Membuat berkas teks demonstrasi langsung di sandbox aplikasi tanpa koneksi internet"
+          accessibilityLabel="Buat dokumen laporan dan paket bukti baru"
         >
           <Text style={styles.secondaryButtonText}>
-            📄 Buat Dokumen Simulasi (Offline)
+            📝 + Buat Dokumen & Paket Bukti Baru (MB)
           </Text>
         </TouchableOpacity>
       </View>
@@ -120,6 +143,21 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  imageButton: {
+    backgroundColor: "#EFF6FF",
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#93C5FD",
+    paddingHorizontal: 16,
+  },
+  imageButtonText: {
+    color: "#1D4ED8",
     fontSize: 13,
     fontWeight: "700",
   },

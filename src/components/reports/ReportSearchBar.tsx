@@ -10,7 +10,7 @@
  * - Loading feedback terintegrasi tanpa mengganggu interaksi pengetikan pengguna.
  */
 
-import React, { memo } from "react";
+import React, { memo, useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -33,6 +33,27 @@ export const ReportSearchBar = memo(function ReportSearchBar({
   loading,
   resultCount,
 }: ReportSearchBarProps) {
+  // Local state untuk respon pengetikan instan (<16ms 60 FPS) tanpa lag kontrol parent
+  const [localText, setLocalText] = useState(value);
+
+  // Sinkronisasi dengan external prop value ketika di-reset dari luar (contoh: Reset Filter atau Clear)
+  useEffect(() => {
+    setLocalText(value);
+  }, [value]);
+
+  const handleChangeText = useCallback(
+    (text: string) => {
+      setLocalText(text);
+      onChangeText(text);
+    },
+    [onChangeText]
+  );
+
+  const handleClear = useCallback(() => {
+    setLocalText("");
+    onChangeText("");
+  }, [onChangeText]);
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.inputContainer} accessibilityRole="search">
@@ -41,8 +62,8 @@ export const ReportSearchBar = memo(function ReportSearchBar({
           style={styles.input}
           placeholder="Cari laporan kerusakan, longsor, banjir..."
           placeholderTextColor="#94A3B8"
-          value={value}
-          onChangeText={onChangeText}
+          value={localText}
+          onChangeText={handleChangeText}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -55,10 +76,10 @@ export const ReportSearchBar = memo(function ReportSearchBar({
           <View style={styles.loadingBox}>
             <ActivityIndicator size="small" color="#208AEF" />
           </View>
-        ) : value.length > 0 ? (
+        ) : localText.length > 0 ? (
           <AnimatedPressable
             style={styles.clearBtn}
-            onPress={() => onChangeText("")}
+            onPress={handleClear}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Hapus kata kunci pencarian"

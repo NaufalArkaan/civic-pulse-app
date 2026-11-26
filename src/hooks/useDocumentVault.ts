@@ -8,6 +8,7 @@
  */
 
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { documentVault } from "../services/files/documentVault";
 import { VaultFile, VaultFileCategory } from "../types/vault";
@@ -74,10 +75,18 @@ export function useDocumentVault() {
       setIsImporting(true);
       setError(null);
 
-      const pickerResult = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "application/pdf", "text/plain"],
-        copyToCacheDirectory: true,
-      });
+      // copyToCacheDirectory: true memastikan berkas tersalin ke cache aplikasi yang dapat diakses penuh
+      let pickerResult;
+      try {
+        pickerResult = await DocumentPicker.getDocumentAsync({
+          type: "*/*",
+          copyToCacheDirectory: true,
+        });
+      } catch {
+        pickerResult = await DocumentPicker.getDocumentAsync({
+          type: "*/*",
+        });
+      }
 
       if (
         pickerResult.canceled ||
@@ -90,8 +99,10 @@ export function useDocumentVault() {
       const asset = pickerResult.assets[0];
       const res = await documentVault.importFile(
         asset.uri,
-        asset.name,
-        asset.mimeType,
+        asset.name || `dokumen_${Date.now()}`,
+        asset.mimeType || null,
+        undefined,
+        asset.size
       );
 
       if (!isMountedRef.current) return false;
@@ -117,6 +128,135 @@ export function useDocumentVault() {
   }, [refreshFiles]);
 
   /**
+   * Mengimpor foto atau gambar dari galeri perangkat pengguna (Image Picker)
+   * Menyediakan base64: true untuk transfer biner tanpa distorsi
+   */
+  const importImage = useCallback(async (): Promise<boolean> => {
+    if (isProcessingRef.current) return false;
+    isProcessingRef.current = true;
+
+    try {
+      setIsImporting(true);
+      setError(null);
+
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.9,
+        allowsEditing: false,
+        base64: true,
+      });
+
+      if (
+        pickerResult.canceled ||
+        !pickerResult.assets ||
+        pickerResult.assets.length === 0
+      ) {
+        return false;
+      }
+
+      const asset = pickerResult.assets[0];
+      const fileName = asset.fileName || `foto_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || "image/jpeg";
+
+      const res = await documentVault.importFile(
+        asset.uri,
+        fileName,
+        mimeType,
+        "photo",
+        asset.fileSize,
+        asset.base64 || undefined
+      );
+
+      if (!isMountedRef.current) return false;
+
+      if (!res.success) {
+        setError(res.error);
+        return false;
+      }
+
+      await refreshFiles();
+      return true;
+    } catch (err: any) {
+      if (isMountedRef.current) {
+        setError(err?.message || "Terjadi kesalahan saat memilih gambar.");
+      }
+      return false;
+    } finally {
+      isProcessingRef.current = false;
+      if (isMountedRef.current) {
+        setIsImporting(false);
+      }
+    }
+  }, [refreshFiles]);
+
+  /**
+   * Mengambil foto langsung menggunakan kamera perangkat (Anti-Fraud / Anti-Penipuan)
+   */
+  const takeCameraPhoto = useCallback(async (): Promise<boolean> => {
+    if (isProcessingRef.current) return false;
+    isProcessingRef.current = true;
+
+    try {
+      setIsImporting(true);
+      setError(null);
+
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        setError("Izin akses kamera diperlukan untuk mengambil foto bukti langsung.");
+        return false;
+      }
+
+      const pickerResult = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.85,
+        allowsEditing: false,
+        base64: true,
+      });
+
+      if (
+        pickerResult.canceled ||
+        !pickerResult.assets ||
+        pickerResult.assets.length === 0
+      ) {
+        return false;
+      }
+
+      const asset = pickerResult.assets[0];
+      const fileName = `kamera_bukti_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || "image/jpeg";
+
+      const res = await documentVault.importFile(
+        asset.uri,
+        fileName,
+        mimeType,
+        "photo",
+        asset.fileSize,
+        asset.base64 || undefined
+      );
+
+      if (!isMountedRef.current) return false;
+
+      if (!res.success) {
+        setError(res.error);
+        return false;
+      }
+
+      await refreshFiles();
+      return true;
+    } catch (err: any) {
+      if (isMountedRef.current) {
+        setError(err?.message || "Terjadi kesalahan saat mengambil foto kamera.");
+      }
+      return false;
+    } finally {
+      isProcessingRef.current = false;
+      if (isMountedRef.current) {
+        setIsImporting(false);
+      }
+    }
+  }, [refreshFiles]);
+
+  /**
    * Menambahkan dokumen demonstrasi simulasi secara offline
    */
   const addDemoReport = useCallback(
@@ -124,6 +264,7 @@ export function useDocumentVault() {
       title: string,
       content: string,
       category: VaultFileCategory = "document",
+      targetSizeMb = 2.4
     ): Promise<boolean> => {
       if (isProcessingRef.current) return false;
       isProcessingRef.current = true;
@@ -136,6 +277,7 @@ export function useDocumentVault() {
           title,
           content,
           category,
+          targetSizeMb
         );
 
         if (!isMountedRef.current) return false;
@@ -217,6 +359,8 @@ export function useDocumentVault() {
     isImporting,
     refreshFiles,
     importDocument,
+    importImage,
+    takeCameraPhoto,
     addDemoReport,
     deleteFile,
     getFile,

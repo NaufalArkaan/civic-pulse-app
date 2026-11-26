@@ -4,7 +4,7 @@
  * Role: Anggota 1 (Naufal - Lead System Architect & Security Engineer)
  */
 
-import type { Report } from "../../types/report";
+import type { Report, ReportStatus } from "../../types/report";
 import { SearchCriteria, normalizeQuery } from "../../types/search";
 import { classifyAppError, ClassifiedError } from "../../utils/errorTaxonomy";
 import {
@@ -155,7 +155,7 @@ export class SupabaseRestClient {
   }
 
   /**
-   * Menyimpan / memperbarui laporan secara idempotent ke Supabase PostgREST
+   * Membuat / menyisipkan laporan baru secara idempotent ke Supabase PostgREST
    */
   async upsertReportRemote(
     report: Report,
@@ -189,7 +189,7 @@ export class SupabaseRestClient {
       const token = accessToken || this.anonKey;
       const payload = {
         id: report.id,
-        reporter_id: report.reporterId ?? null,
+        reporter_id: null,
         title: report.title,
         category: report.category,
         description: report.description,
@@ -198,6 +198,7 @@ export class SupabaseRestClient {
         longitude: report.coordinate.longitude,
         media_path: report.mediaPath ?? null,
         severity: report.severity,
+        idempotency_key: idempotencyKey,
         created_at: report.createdAt,
         updated_at: report.updatedAt,
       };
@@ -208,8 +209,7 @@ export class SupabaseRestClient {
           apikey: this.anonKey,
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=minimal",
-          "X-Idempotency-Key": idempotencyKey,
+          Prefer: "resolution=merge-duplicates,return=representation",
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -219,7 +219,7 @@ export class SupabaseRestClient {
         return {
           confirmed: false,
           error: classifyAppError(
-            new Error(`Supabase mutation rejected with HTTP ${response.status}`),
+            new Error(`Supabase insert rejected with HTTP ${response.status}`),
             response.status
           ),
           status: response.status,
@@ -227,6 +227,94 @@ export class SupabaseRestClient {
       }
 
       return { confirmed: true, error: null, status: response.status };
+    } catch (err) {
+      return {
+        confirmed: false,
+        error: classifyAppError(err),
+        status: 0,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Memperbarui status laporan menggunakan HTTP PATCH pada baris spesifik (?id=eq.{id})
+   * Menghindari benturan dengan kebijakan INSERT RLS yang mewajibkan status='submitted'.
+   */
+  async updateReportStatusRemote(
+    reportId: string,
+    newStatus: ReportStatus,
+    updatedAt: string,
+    accessToken?: string | null
+  ): Promise<{ confirmed: boolean; error: ClassifiedError | null; status: number }> {
+    const audit = auditSupabaseEnvironment(this.baseUrl, this.anonKey);
+    if (audit.securityViolation) {
+      return {
+        confirmed: false,
+        error: classifyAppError(new Error(audit.securityViolation), 403),
+        status: 403,
+      };
+    }
+
+    if (!audit.isConfigured) {
+      return {
+        confirmed: false,
+        error: classifyAppError(new Error("Supabase environment not configured"), 0),
+        status: 0,
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      SUPABASE_QUERY_LIMITS.REQUEST_TIMEOUT_MS
+    );
+
+    try {
+      const token = accessToken || this.anonKey;
+      const response = await fetch(
+        `${this.baseUrl}/rest/v1/reports?id=eq.${encodeURIComponent(reportId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            apikey: this.anonKey,
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            updated_at: updatedAt,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        return {
+          confirmed: false,
+          error: classifyAppError(
+            new Error(`Supabase status update rejected with HTTP ${response.status}`),
+            response.status
+          ),
+          status: response.status,
+        };
+      }
+
+      const updatedRows = await response.json();
+      const wasRowUpdated = Array.isArray(updatedRows) && updatedRows.length > 0;
+
+      return {
+        confirmed: wasRowUpdated,
+        error: wasRowUpdated
+          ? null
+          : classifyAppError(
+              new Error("RLS policy blocked anonymous update on remote row"),
+              403
+            ),
+        status: wasRowUpdated ? response.status : 403,
+      };
     } catch (err) {
       return {
         confirmed: false,

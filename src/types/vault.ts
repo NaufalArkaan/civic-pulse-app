@@ -36,7 +36,9 @@ export interface IDocumentVaultService {
     sourceUri: string,
     originalName: string,
     mimeType?: string | null,
-    category?: VaultFileCategory
+    category?: VaultFileCategory,
+    knownSizeBytes?: number | null,
+    base64Data?: string | null
   ): Promise<VaultOperationResult<VaultFile>>;
   deleteFile(id: string): Promise<VaultOperationResult<void>>;
   getFile(id: string): Promise<VaultOperationResult<VaultFile>>;

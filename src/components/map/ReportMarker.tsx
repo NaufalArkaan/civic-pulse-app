@@ -109,6 +109,11 @@ export const ReportMarker = memo(
             ]}
           >
             <Text style={styles.iconText}>{icon}</Text>
+            {report.mediaPath && (
+              <View style={styles.photoIndicator}>
+                <Text style={styles.photoIndicatorText}>📷</Text>
+              </View>
+            )}
           </View>
 
           {/* Severity Dot Indicator */}
@@ -123,6 +128,7 @@ export const ReportMarker = memo(
       prevProps.report.id === nextProps.report.id &&
       prevProps.report.severity === nextProps.report.severity &&
       prevProps.report.category === nextProps.report.category &&
+      prevProps.report.mediaPath === nextProps.report.mediaPath &&
       prevProps.report.updatedAt === nextProps.report.updatedAt &&
       prevProps.report.coordinate.latitude === nextProps.report.coordinate.latitude &&
       prevProps.report.coordinate.longitude === nextProps.report.coordinate.longitude
@@ -136,6 +142,22 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: "center",
     justifyContent: "center",
+  },
+  photoIndicator: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#0F172A",
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  photoIndicatorText: {
+    fontSize: 8.5,
   },
   selectionHalo: {
     position: "absolute",

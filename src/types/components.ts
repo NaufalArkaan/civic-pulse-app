@@ -84,12 +84,16 @@ export type VaultFileListProps = {
   onOpenFile: (file: VaultFile) => void;
   onDeleteFile: (id: string) => void;
   onImportDocument: () => void;
+  onImportImage?: () => void;
+  onTakePhoto?: () => void;
   onCreateDemoReport: () => void;
   isImporting?: boolean;
 };
 
 export type VaultEmptyStateProps = {
   onImportDocument: () => void;
+  onImportImage?: () => void;
+  onTakePhoto?: () => void;
   onCreateDemoReport: () => void;
   isImporting?: boolean;
 };
@@ -99,11 +103,12 @@ export type VaultFilePreviewModalProps = {
   visible: boolean;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  onUseAsReportEvidence?: (file: VaultFile) => void;
 };
 
 export type VaultJitModalProps = {
   visible: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  actionType?: "import" | "camera" | "storage";
+  actionType?: "import" | "camera" | "gallery" | "storage";
 };

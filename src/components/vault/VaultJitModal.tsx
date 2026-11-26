@@ -19,15 +19,19 @@ export const VaultJitModal = memo(function VaultJitModal({
   onCancel,
   actionType = "import",
 }: VaultJitModalProps) {
-  const icon = actionType === "camera" ? "📸" : "📁";
+  const icon = actionType === "camera" ? "📸" : actionType === "gallery" ? "🖼️" : "📁";
   const title =
     actionType === "camera"
       ? "Izin Akses Kamera (Just-In-Time)"
+      : actionType === "gallery"
+      ? "Pilih Foto dari Galeri (Scoped Storage)"
       : "Akses Berkas Mandiri (Scoped Storage)";
 
   const explanation =
     actionType === "camera"
-      ? "Civic Pulse memerlukan akses kamera hanya saat Anda mengambil foto bukti infrastruktur. Izin tidak dipicu di latar belakang dan dapat diubah kapan saja melalui Pengaturan Perangkat."
+      ? "Civic Pulse memerlukan akses kamera hanya saat Anda mengambil foto bukti infrastruktur secara langsung. Izin tidak dipicu di latar belakang dan dapat diubah kapan saja melalui Pengaturan Perangkat."
+      : actionType === "gallery"
+      ? "Civic Pulse hanya mengakses foto yang Anda pilih secara spesifik dari galeri perangkat. Tidak ada akses ke foto lain di ponsel Anda."
       : "Civic Pulse menggunakan System Document Picker. Aplikasi TIDAK meminta izin membaca seluruh penyimpanan ponsel Anda (No Broad Storage Permission). Hanya berkas yang Anda pilih yang akan disalin ke sandbox privat aplikasi.";
 
   return (

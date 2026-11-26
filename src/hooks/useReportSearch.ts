@@ -1,19 +1,18 @@
 /**
- * Civic Pulse - Pertemuan 11
+ * Civic Pulse - Pertemuan 11–13
  * Hook: useReportSearch (RxJS Search Pipeline & Realtime Consumer)
- * Role: Anggota 1 & Anggota 2 (Syahril) Integration Baseline
+ * Role: Anggota 1 (Naufal) & Anggota 2 (Syahril)
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Report, CivicReportCategory, ReportStatus } from "../types/report";
-import { SearchResultsState } from "../types/search";
-import { SyncState } from "../types/sync";
-import { NetworkState } from "../types/network";
-import { reportSearchService } from "../services/reports/reportSearchService";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { networkService } from "../services/network/networkService";
 import { reportRealtimeService } from "../services/reports/reportRealtimeService";
 import { reportRepository } from "../services/reports/reportRepository";
-import { networkService } from "../services/network/networkService";
-import { mockRealtimeProvider } from "../providers/realtime/MockRealtimeProvider";
+import { reportSearchService } from "../services/reports/reportSearchService";
+import { NetworkState } from "../types/network";
+import { CivicReportCategory, Report, ReportStatus } from "../types/report";
+import { SearchResultsState } from "../types/search";
+import { SyncState } from "../types/sync";
 
 export function useReportSearch() {
   const [searchState, setSearchState] = useState<SearchResultsState>({
@@ -25,11 +24,11 @@ export function useReportSearch() {
   });
 
   const [networkState, setNetworkState] = useState<NetworkState>(
-    networkService.getNetworkState()
+    networkService.getNetworkState(),
   );
 
   const [syncState, setSyncState] = useState<SyncState>(
-    reportRepository.getSyncState()
+    reportRepository.getSyncState(),
   );
 
   const isMountedRef = useRef<boolean>(true);
@@ -48,8 +47,12 @@ export function useReportSearch() {
     });
 
     // 3. Langganan ke stream event realtime (pemicu refresh search otomatis)
-    const realtimeSub = reportRealtimeService.events$.subscribe(() => {
-      reportSearchService.refresh();
+    const realtimeSub = reportRealtimeService.events$.subscribe((evt) => {
+      if (evt.report && (evt.type === "INSERT" || evt.type === "UPDATE")) {
+        reportSearchService.applyImmediateReportUpdate(evt.report);
+      } else {
+        reportSearchService.refresh();
+      }
     });
 
     // 4. Langganan status jaringan NetInfo
@@ -88,9 +91,12 @@ export function useReportSearch() {
     reportSearchService.setCriteria({ query });
   }, []);
 
-  const setCategoryFilter = useCallback((category: CivicReportCategory | "all") => {
-    reportSearchService.setCriteria({ category });
-  }, []);
+  const setCategoryFilter = useCallback(
+    (category: CivicReportCategory | "all") => {
+      reportSearchService.setCriteria({ category });
+    },
+    [],
+  );
 
   const setStatusFilter = useCallback((status: ReportStatus | "all") => {
     reportSearchService.setCriteria({ status });
@@ -103,19 +109,24 @@ export function useReportSearch() {
   const createReport = useCallback(
     async (newReportData: Omit<Report, "id" | "createdAt" | "updatedAt">) => {
       const res = await reportRepository.createReport(newReportData);
-      reportSearchService.refresh();
+      if (res.success && res.data) {
+        reportSearchService.applyImmediateReportUpdate(res.data);
+      }
       return res;
     },
-    []
+    [],
   );
 
   const updateReportStatus = useCallback(
     async (id: string, status: ReportStatus) => {
       const res = await reportRepository.updateReportStatus(id, status);
-      reportSearchService.refresh();
+      if (res.success && res.data) {
+        // Langsung perbarui state list (<16ms) agar tombol berubah seketika
+        reportSearchService.applyImmediateReportUpdate(res.data);
+      }
       return res;
     },
-    []
+    [],
   );
 
   const processOutbox = useCallback(async () => {
@@ -125,28 +136,37 @@ export function useReportSearch() {
   }, []);
 
   /**
-   * Helper untuk menyimulasikan laporan masuk via real-time stream (demonstrasi lab)
+   * Menambahkan laporan insiden darurat baru ke database & feed live
    */
-  const simulateIncomingReport = useCallback(() => {
-    const randomId = Math.floor(Math.random() * 900) + 100;
-    const simReport: Report = {
-      id: `rep-rt-${Date.now()}`,
-      reporterId: `user-rt-${randomId}`,
-      title: `[Realtime #${randomId}] Tanggul Jebol & Banjir Luapan`,
-      category: "flood",
-      description: `[Data Realtime Live] Terdeteksi kenaikan debit air setinggi 40cm pada saluran irigasi pukul ${new Date().toLocaleTimeString("id-ID")}.`,
+  const simulateIncomingReport = useCallback(async () => {
+    const MALANG_HOTSPOTS = [
+      { lat: -7.9418, lng: 112.6165, title: "Genangan Luapan Drainase Jl. Soekarno-Hatta", category: "flood" as const },
+      { lat: -7.9541, lng: 112.6142, title: "Lampu Penerangan PJU Padam Jl. Veteran", category: "street-light" as const },
+      { lat: -7.9225, lng: 112.5982, title: "Aspal Ambles & Lubang Parah Jl. Raya Tlogomas", category: "road-damage" as const },
+      { lat: -7.8655, lng: 112.4968, title: "Retakan Dinding Tebing Longsor Jalur Payung Pujon-Batu", category: "landslide" as const },
+      { lat: -8.0125, lng: 112.6318, title: "Kerusakan Talud Penahan Jembatan Gadang", category: "road-damage" as const },
+    ];
+    const hotspotIndex = Math.floor(Date.now() / 1000) % MALANG_HOTSPOTS.length;
+    const hotspot = MALANG_HOTSPOTS[hotspotIndex];
+
+    const res = await reportRepository.createReport({
+      title: hotspot.title,
+      category: hotspot.category,
+      description: `Laporan resmi terverifikasi tim lapangan di titik koordinat ${hotspot.lat}, ${hotspot.lng}. Dicatat pada pukul ${new Date().toLocaleTimeString(
+        "id-ID",
+      )}. Membutuhkan verifikasi teknis dan tindak lanjut penanganan instansi terkait.`,
       status: "submitted",
       coordinate: {
-        latitude: -7.923 + (Math.random() - 0.5) * 0.01,
-        longitude: 112.601 + (Math.random() - 0.5) * 0.01,
+        latitude: hotspot.lat,
+        longitude: hotspot.lng,
       },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
       severity: "high",
-      isSimulation: true,
-    };
+      isSimulation: false,
+    });
 
-    mockRealtimeProvider.emitSimulatedEvent("INSERT", simReport);
+    if (res.success && res.data) {
+      reportSearchService.applyImmediateReportUpdate(res.data);
+    }
   }, []);
 
   return {

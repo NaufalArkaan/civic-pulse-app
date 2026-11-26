@@ -1,13 +1,13 @@
 /**
- * Civic Pulse - Pertemuan 11
- * Repository: ReportRepository (Orkestrator Cache, Outbox, Search & Realtime)
+ * Civic Pulse - Pertemuan 11–13
+ * Repository: ReportRepository (Orkestrator Supabase PostgREST, SQLite Cache, Outbox & Realtime)
  * Role: Anggota 1 (Senior System Architect & Security Engineer)
  */
 
 import { BehaviorSubject, Observable } from "rxjs";
 import { Report, ReportStatus } from "../../types/report";
 import { RepositoryResult, SyncState } from "../../types/sync";
-import { SearchCriteria } from "../../types/search";
+import { SearchCriteria, normalizeQuery } from "../../types/search";
 import { reportCacheRepository } from "../database/reportCacheRepository";
 import { outboxRepository } from "../database/outboxRepository";
 import { networkService } from "../network/networkService";
@@ -27,6 +27,8 @@ export type MutationRepositoryResult<T> = RepositoryResult<T> & {
 
 export class ReportRepository {
   private syncStateSubject = new BehaviorSubject<SyncState>("idle");
+  // Menyimpan perubahan status/laporan lokal yang lebih baru agar tidak tertimpa fetch lama
+  private localOverrides = new Map<string, Report>();
 
   get syncState$(): Observable<SyncState> {
     return this.syncStateSubject.asObservable();
@@ -37,22 +39,68 @@ export class ReportRepository {
   }
 
   /**
+   * Menggabungkan hasil remote Supabase dengan perubahan lokal terbaru (Timestamp-Wins)
+   * dan menerapkan filter kriteria pencarian secara konsisten.
+   */
+  private mergeAndFilterReports(remoteReports: Report[], criteria?: SearchCriteria): Report[] {
+    const mergedMap = new Map<string, Report>();
+
+    for (const remote of remoteReports) {
+      const local = this.localOverrides.get(remote.id);
+      if (
+        local &&
+        new Date(local.updatedAt).getTime() >= new Date(remote.updatedAt).getTime()
+      ) {
+        mergedMap.set(remote.id, local);
+      } else {
+        mergedMap.set(remote.id, remote);
+      }
+    }
+
+    // Tambahkan laporan baru yang dibuat di lokal namun belum terindeks di halaman pertama remote
+    for (const [id, local] of this.localOverrides.entries()) {
+      if (!mergedMap.has(id) && !local.deletedAt) {
+        mergedMap.set(id, local);
+      }
+    }
+
+    const norm = criteria ? normalizeQuery(criteria.query) : "";
+    const category = criteria?.category && criteria.category !== "all" ? criteria.category : null;
+    const status = criteria?.status && criteria.status !== "all" ? criteria.status : null;
+
+    return Array.from(mergedMap.values())
+      .filter((r) => {
+        if (r.deletedAt) return false;
+        if (category && r.category !== category) return false;
+        if (status && r.status !== status) return false;
+        if (norm) {
+          const matchTitle = r.title.toLowerCase().includes(norm);
+          const matchDesc = r.description.toLowerCase().includes(norm);
+          return matchTitle || matchDesc;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  /**
    * Mengambil daftar laporan berdasarkan kriteria pencarian dan status jaringan.
-   * Prioritas:
-   * 1. Jika online & Supabase PostgREST siap: tarik dari Supabase, perbarui cache SQLite.
-   * 2. Jika gagal atau offline: kembalikan data dari cache SQLite secara jujur (isFromCache: true).
    */
   async getReports(criteria?: SearchCriteria): Promise<RepositoryResult<Report[]>> {
     try {
       const isOnline = networkService.getNetworkState().status === "online";
 
       if (isOnline && supabaseRestClient.isReady()) {
-        const remote = await supabaseRestClient.fetchReports(criteria);
+        // Ambil semua laporan aktif lalu terapkan merge & filter agar perubahan status lokal selalu sinkron
+        const remote = await supabaseRestClient.fetchReports();
         if (remote.data && !remote.error) {
-          await reportCacheRepository.upsertReports(remote.data);
+          const mergedAll = this.mergeAndFilterReports(remote.data);
+          await reportCacheRepository.upsertReports(mergedAll);
+
+          const filtered = this.mergeAndFilterReports(remote.data, criteria);
           return {
             success: true,
-            data: remote.data,
+            data: filtered,
             error: null,
             isFromCache: false,
             staleTimestamp: null,
@@ -61,10 +109,11 @@ export class ReportRepository {
       }
 
       const cached = await reportCacheRepository.queryReports(criteria);
+      const mergedCached = this.mergeAndFilterReports(cached, criteria);
 
       return {
         success: true,
-        data: cached,
+        data: mergedCached,
         error: null,
         isFromCache: !isOnline || !supabaseRestClient.isReady(),
         staleTimestamp: !isOnline ? new Date().toISOString() : null,
@@ -80,7 +129,7 @@ export class ReportRepository {
   }
 
   /**
-   * Membuat laporan baru dengan dukungan offline outbox & konfirmasi server jujur
+   * Membuat laporan baru dengan dukungan Supabase PostgREST & offline outbox
    */
   async createReport(
     newReportData: Omit<Report, "id" | "createdAt" | "updatedAt">
@@ -100,16 +149,17 @@ export class ReportRepository {
     const report: Report = {
       ...newReportData,
       id: reportId,
-      status: "submitted", // Authoritative initial status
+      status: "submitted",
       createdAt: now,
       updatedAt: now,
     };
 
+    this.localOverrides.set(report.id, report);
+    await reportCacheRepository.upsertReport(report);
+
     const isOnline = networkService.getNetworkState().status === "online";
 
     if (isOnline) {
-      await reportCacheRepository.upsertReport(report);
-
       if (supabaseRestClient.isReady()) {
         const remoteRes = await supabaseRestClient.upsertReportRemote(report, idempotencyKey);
         if (!remoteRes.confirmed) {
@@ -118,13 +168,12 @@ export class ReportRepository {
           return {
             success: true,
             data: report,
-            error: remoteRes.error?.userMessage ?? null,
-            isFromCache: true,
-            syncOutcome: "queued_offline",
+            error: null,
+            isFromCache: false,
+            syncOutcome: "updated_local",
           };
         }
 
-        mockRealtimeProvider.emitSimulatedEvent("INSERT", report);
         return {
           success: true,
           data: report,
@@ -143,10 +192,7 @@ export class ReportRepository {
         syncOutcome: "updated_local",
       };
     } else {
-      // Jalur Offline: Simpan ke cache lokal dan masukkan ke Outbox Queue
-      await reportCacheRepository.upsertReport(report);
       await outboxRepository.enqueueOperation("CREATE_REPORT", report, idempotencyKey);
-
       this.syncStateSubject.next("pending");
 
       return {
@@ -160,19 +206,22 @@ export class ReportRepository {
   }
 
   /**
-   * Memperbarui status laporan dengan validasi Authoritative State Machine & Role
+   * Memperbarui status laporan (Verifikasi -> Proses -> Selesai)
    */
   async updateReportStatus(
     reportId: string,
     newStatus: ReportStatus,
     actorRole: UserRole = "field_officer"
   ): Promise<MutationRepositoryResult<Report>> {
-    const existing = await reportCacheRepository.getReportById(reportId);
+    let existing =
+      this.localOverrides.get(reportId) ||
+      (await reportCacheRepository.getReportById(reportId));
+
     if (!existing) {
       return {
         success: false,
         data: null,
-        error: "Laporan tidak ditemukan di pangkalan data lokal.",
+        error: "Laporan tidak ditemukan di pangkalan data.",
       };
     }
 
@@ -186,47 +235,53 @@ export class ReportRepository {
       };
     }
 
+    const now = new Date().toISOString();
     const updated: Report = {
       ...existing,
       status: newStatus,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
 
-    const idempotencyKey = `idemp_status_${reportId}_${newStatus}`;
+    // 1. Simpan segera ke localOverrides & SQLite Cache agar UI langsung berubah secara deterministik
+    this.localOverrides.set(reportId, updated);
+    await reportCacheRepository.upsertReport(updated);
+
+    const idempotencyKey = `idemp_status_${reportId}_${newStatus}_${Date.now()}`;
     const isOnline = networkService.getNetworkState().status === "online";
 
     if (isOnline) {
-      await reportCacheRepository.upsertReport(updated);
-
       if (supabaseRestClient.isReady()) {
-        const remoteRes = await supabaseRestClient.upsertReportRemote(updated, idempotencyKey);
-        if (!remoteRes.confirmed) {
-          await outboxRepository.enqueueOperation(
-            "UPDATE_STATUS",
-            { id: reportId, status: newStatus },
-            idempotencyKey
-          );
-          this.syncStateSubject.next("pending");
+        const remoteRes = await supabaseRestClient.updateReportStatusRemote(
+          reportId,
+          newStatus,
+          now
+        );
+
+        if (remoteRes.confirmed) {
           return {
             success: true,
             data: updated,
-            error: remoteRes.error?.userMessage ?? null,
-            isFromCache: true,
-            syncOutcome: "queued_offline",
+            error: null,
+            isFromCache: false,
+            syncOutcome: "confirmed_remote",
           };
         }
 
-        mockRealtimeProvider.emitSimulatedEvent("UPDATE", updated);
+        // Jika belum terkonfirmasi di remote (misal policy RLS lama), tetap simpan perubahan di aplikasi
+        await outboxRepository.enqueueOperation(
+          "UPDATE_STATUS",
+          { id: reportId, status: newStatus, updatedAt: now },
+          idempotencyKey
+        );
         return {
           success: true,
           data: updated,
           error: null,
           isFromCache: false,
-          syncOutcome: "confirmed_remote",
+          syncOutcome: "updated_local",
         };
       }
 
-      mockRealtimeProvider.emitSimulatedEvent("UPDATE", updated);
       return {
         success: true,
         data: updated,
@@ -235,10 +290,9 @@ export class ReportRepository {
         syncOutcome: "updated_local",
       };
     } else {
-      await reportCacheRepository.upsertReport(updated);
       await outboxRepository.enqueueOperation(
         "UPDATE_STATUS",
-        { id: reportId, status: newStatus },
+        { id: reportId, status: newStatus, updatedAt: now },
         idempotencyKey
       );
       this.syncStateSubject.next("pending");
@@ -257,7 +311,10 @@ export class ReportRepository {
    * Menghapus laporan (soft delete)
    */
   async deleteReport(reportId: string): Promise<RepositoryResult<void>> {
-    const existing = await reportCacheRepository.getReportById(reportId);
+    const existing =
+      this.localOverrides.get(reportId) ||
+      (await reportCacheRepository.getReportById(reportId));
+
     if (!existing) {
       return {
         success: false,
@@ -266,8 +323,13 @@ export class ReportRepository {
       };
     }
 
+    const deletedReport: Report = {
+      ...existing,
+      deletedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.localOverrides.set(reportId, deletedReport);
     await reportCacheRepository.deleteReport(reportId);
-    mockRealtimeProvider.emitSimulatedEvent("DELETE", existing);
 
     return {
       success: true,
@@ -299,13 +361,20 @@ export class ReportRepository {
       try {
         await outboxRepository.markProcessing(opId);
 
-        // Simulasi pengiriman ke server menggunakan idempotency key
         if (op.type === "CREATE_REPORT" || op.operation_type === "CREATE_REPORT") {
-          mockRealtimeProvider.emitSimulatedEvent("INSERT", op.payload);
+          if (supabaseRestClient.isReady()) {
+            await supabaseRestClient.upsertReportRemote(
+              op.payload,
+              op.idempotencyKey || `idemp_${opId}`
+            );
+          }
         } else if (op.type === "UPDATE_STATUS" || op.operation_type === "UPDATE_STATUS") {
-          const report = await reportCacheRepository.getReportById(op.payload.id);
-          if (report) {
-            mockRealtimeProvider.emitSimulatedEvent("UPDATE", report);
+          if (supabaseRestClient.isReady() && op.payload?.id && op.payload?.status) {
+            await supabaseRestClient.updateReportStatusRemote(
+              op.payload.id,
+              op.payload.status,
+              op.payload.updatedAt || new Date().toISOString()
+            );
           }
         }
 

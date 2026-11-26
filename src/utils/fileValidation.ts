@@ -1,34 +1,79 @@
 /**
- * Civic Pulse - Pertemuan 10
+ * Civic Pulse - Pertemuan 10–13
  * Utility: File Validation, Name Sanitization & Privacy Masking
- * Role: Anggota 3 (Lead Hardware & Spatial/Network Engineer) & Anggota 1 (Lead System Architect)
+ * Role: Anggota 3 (Robi) & Anggota 1 (Naufal - Lead System Architect)
  */
 
-export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit default
+export const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024; // 150 MB limit untuk mendukung foto/dokumen/video resolusi tinggi
 
 export const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
   "application/pdf",
   "text/plain",
+  "text/csv",
+  "application/json",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "application/x-zip-compressed",
+  "video/mp4",
+  "video/quicktime",
 ];
 
-export const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt"];
+export const ALLOWED_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".heic",
+  ".heif",
+  ".pdf",
+  ".txt",
+  ".csv",
+  ".json",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".zip",
+  ".mp4",
+  ".mov",
+];
+
+const FORBIDDEN_EXTENSIONS = [
+  ".exe",
+  ".bat",
+  ".cmd",
+  ".sh",
+  ".js",
+  ".vbs",
+  ".ps1",
+  ".msi",
+  ".apk",
+  ".com",
+  ".scr",
+];
 
 /**
  * Sanitasi nama berkas untuk mencegah Path Traversal (CWE-22) dan karakter berbahaya
  */
 export function sanitizeFileName(rawName: string): string {
   if (!rawName) return `file_${Date.now()}`;
-  // Hapus jalur path traversal (/ dan \)
   const base = rawName.replace(/^.*[\\/]/, "");
-  // Ganti karakter non-alfanumerik kecuali titik, dash, dan underscore
   let clean = base
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .replace(/\.{2,}/g, ".");
 
-  // Cegah berkas dengan nama titik saja atau kosong
   if (!clean || clean === "." || clean === "..") {
     clean = `file_${Date.now()}`;
   }
@@ -37,14 +82,32 @@ export function sanitizeFileName(rawName: string): string {
 }
 
 /**
- * Validasi ekstensi dan perkiraan tipe berkas
+ * Validasi ekstensi dan perkiraan tipe berkas (menolak file executable/script berbahaya)
  */
 export function isAllowedFile(fileName: string, mimeType?: string | null): boolean {
   const lowerName = fileName.toLowerCase();
+
+  // Tolak tegas ekstensi berbahaya (executable/script)
+  if (FORBIDDEN_EXTENSIONS.some((ext) => lowerName.endsWith(ext))) {
+    return false;
+  }
+
   const hasValidExt = ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
 
   if (mimeType) {
-    const isMimeAllowed = ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase());
+    const lowerMime = mimeType.toLowerCase();
+    if (
+      lowerMime.includes("msdownload") ||
+      lowerMime.includes("javascript") ||
+      lowerMime.includes("x-sh") ||
+      lowerMime.includes("x-executable")
+    ) {
+      return false;
+    }
+    const isMimeAllowed =
+      ALLOWED_MIME_TYPES.includes(lowerMime) ||
+      lowerMime.startsWith("image/") ||
+      lowerMime.startsWith("video/");
     return hasValidExt || isMimeAllowed;
   }
 
@@ -64,18 +127,33 @@ export function inferFileCategory(
     lower.endsWith(".jpeg") ||
     lower.endsWith(".png") ||
     lower.endsWith(".webp") ||
+    lower.endsWith(".heic") ||
+    lower.endsWith(".heif") ||
     mimeType?.startsWith("image/")
   ) {
     return "photo";
   }
-  if (lower.endsWith(".pdf") || lower.endsWith(".txt") || mimeType?.includes("pdf")) {
+  if (
+    lower.endsWith(".pdf") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".doc") ||
+    lower.endsWith(".docx") ||
+    lower.endsWith(".xls") ||
+    lower.endsWith(".xlsx") ||
+    lower.endsWith(".ppt") ||
+    lower.endsWith(".pptx") ||
+    lower.endsWith(".csv") ||
+    mimeType?.includes("pdf") ||
+    mimeType?.includes("document") ||
+    mimeType?.includes("text")
+  ) {
     return "document";
   }
   return "other";
 }
 
 /**
- * Validasi ukuran berkas terkonfigurasi
+ * Validasi ukuran berkas terkonfigurasi (mendukung file besar hingga 150 MB)
  */
 export function validateFileSize(
   sizeBytes: number | null | undefined,
@@ -121,7 +199,7 @@ export function validateFileEntry(
       valid: false,
       sanitizedName: sanitized,
       category: "other",
-      error: `Format berkas "${sanitized}" tidak didukung. Harap gunakan format gambar (JPG, PNG, WEBP) atau dokumen (PDF, TXT).`,
+      error: `Format berkas "${sanitized}" tidak didukung demi keamanan. Gunakan gambar, PDF, dokumen Office, ZIP, atau video MP4.`,
     };
   }
 
@@ -144,7 +222,6 @@ export function validateFileEntry(
 
 /**
  * Masking NIK untuk privasi pengguna di antarmuka (UI)
- * Contoh: "3573031204010001" -> "357303******0001"
  */
 export function maskNIK(nik: string | null | undefined): string {
   if (!nik) return "-";
@@ -156,8 +233,7 @@ export function maskNIK(nik: string | null | undefined): string {
 }
 
 /**
- * Masking Token Autentikasi untuk keamanan demonstrasi
- * Contoh: "civic_tok_e91b2c3d4e5f6a7b" -> "civic_tok_****6a7b"
+ * Masking Token Autentikasi untuk keamanan
  */
 export function maskToken(token: string | null | undefined): string {
   if (!token) return "-";

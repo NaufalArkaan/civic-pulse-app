@@ -9,7 +9,7 @@
  * - Local SQLite Cache & Outbox Queue: Anggota 3 (Robi)
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -19,15 +19,25 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import * as Sharing from "expo-sharing";
 
 import { Report, ReportStatus } from "../types/report";
 import { useReportSearch } from "../hooks/useReportSearch";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { LAYOUT_CONSTRAINTS } from "../constants/breakpoints";
+import {
+  getReportPhotoUri,
+  isReportUsingVaultMedia,
+  isReportDocumentMedia,
+  getReportMediaFilename,
+  DISASTER_CATEGORY_PHOTOS,
+} from "../utils/reportMedia";
 import {
   ReportSearchBar,
   ReportFilterBar,
@@ -40,13 +50,48 @@ import { AnimatedPressable, FeedbackToast } from "../components/common";
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    createWithVaultUri?: string;
+    createWithVaultName?: string;
+    createWithVaultCategory?: "photo" | "document" | "other";
+  }>();
   const { width, height, centeredContainerStyle } = useResponsiveLayout();
 
   // State untuk modal detail laporan
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [detailPhotoError, setDetailPhotoError] = useState<boolean>(false);
+
+  useEffect(() => {
+    setDetailPhotoError(false);
+  }, [selectedReport]);
 
   // State untuk modal pembuatan laporan baru (Supabase Backed)
   const [isCreateModalVisible, setIsCreateModalVisible] = useState<boolean>(false);
+
+  // Jika dialihkan dari Document Vault dengan berkas yang dipilih, buka modal lapor otomatis
+  useEffect(() => {
+    if (params?.createWithVaultUri) {
+      setIsCreateModalVisible(true);
+    }
+  }, [params?.createWithVaultUri]);
+
+  // Handler membuka berkas dokumen lampiran
+  const handleOpenDetailDoc = useCallback(async () => {
+    if (!selectedReport?.mediaPath) return;
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert("Fitur Berbagi", "Sistem operasi tidak mendukung pembukaan berkas.");
+        return;
+      }
+      await Sharing.shareAsync(selectedReport.mediaPath, {
+        dialogTitle: `Buka Dokumen Bukti ${selectedReport.title}`,
+        UTI: "public.composite-content",
+      });
+    } catch (err: any) {
+      Alert.alert("Gagal Membuka Berkas", err?.message || "Tidak dapat membuka dokumen.");
+    }
+  }, [selectedReport]);
 
   // State umpan balik mikro (Toast) dengan tipe jujur (success / error / info)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -342,6 +387,50 @@ export default function ReportsScreen() {
             </View>
 
             <ScrollView style={styles.modalBody}>
+              {/* Bukti Media Terlampir (Foto atau Dokumen PDF dari Document Vault) */}
+              {selectedReport && isReportDocumentMedia(selectedReport) ? (
+                <View style={styles.detailDocCard}>
+                  <Text style={styles.detailDocIcon}>📄</Text>
+                  <View style={styles.detailDocTextGroup}>
+                    <Text style={styles.detailDocTitle} numberOfLines={1}>
+                      {getReportMediaFilename(selectedReport)}
+                    </Text>
+                    <Text style={styles.detailDocBadge}>
+                      🔒 Dokumen Bukti Lapangan (Document Vault)
+                    </Text>
+                  </View>
+                  <AnimatedPressable
+                    style={styles.detailDocOpenBtn}
+                    onPress={handleOpenDetailDoc}
+                    accessibilityRole="button"
+                    accessibilityLabel="Ekspor atau bagikan dokumen PDF lampiran"
+                  >
+                    <Text style={styles.detailDocOpenText}>📤 Ekspor / Bagikan PDF</Text>
+                  </AnimatedPressable>
+                </View>
+              ) : selectedReport ? (
+                <View style={styles.detailPhotoContainer}>
+                  <Image
+                    source={{
+                      uri: detailPhotoError
+                        ? DISASTER_CATEGORY_PHOTOS[selectedReport.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
+                        : getReportPhotoUri(selectedReport),
+                    }}
+                    style={styles.detailPhoto}
+                    contentFit="cover"
+                    transition={150}
+                    onError={() => setDetailPhotoError(true)}
+                  />
+                  <View style={styles.detailPhotoBadge}>
+                    <Text style={styles.detailPhotoBadgeText}>
+                      {isReportUsingVaultMedia(selectedReport)
+                        ? `🔒 Bukti Foto Asli Warga (Document Vault)`
+                        : "📸 Foto Dokumentasi Mitigasi (SDG 11)"}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
               <Text style={styles.modalDescription}>
                 {selectedReport?.description}
               </Text>
@@ -384,6 +473,9 @@ export default function ReportsScreen() {
         visible={isCreateModalVisible}
         onClose={() => setIsCreateModalVisible(false)}
         onSubmit={handleCreateReport}
+        initialVaultFileUri={params?.createWithVaultUri}
+        initialVaultFileName={params?.createWithVaultName}
+        initialVaultFileType={params?.createWithVaultCategory}
       />
     </View>
   );
@@ -600,6 +692,73 @@ const styles = StyleSheet.create({
   modalActionBtnText: {
     color: "#FFFFFF",
     fontSize: 13,
+    fontWeight: "700",
+  },
+  detailPhotoContainer: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+    marginBottom: 14,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  detailPhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  detailPhotoBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  detailPhotoBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  detailDocCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+  detailDocIcon: {
+    fontSize: 26,
+    marginRight: 10,
+  },
+  detailDocTextGroup: {
+    flex: 1,
+  },
+  detailDocTitle: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  detailDocBadge: {
+    fontSize: 10.5,
+    color: "#15803D",
+    marginTop: 2,
+  },
+  detailDocOpenBtn: {
+    backgroundColor: "#166534",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+  },
+  detailDocOpenText: {
+    color: "#FFFFFF",
+    fontSize: 11,
     fontWeight: "700",
   },
 });

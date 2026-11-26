@@ -11,8 +11,9 @@
  * - Aksesibilitas penuh untuk screen reader (TalkBack & VoiceOver).
  */
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
 import Animated, {
     ReduceMotion,
     useAnimatedStyle,
@@ -20,6 +21,11 @@ import Animated, {
     withSpring,
 } from "react-native-reanimated";
 import { CivicReportCategory, Report, ReportStatus } from "../../types/report";
+import {
+  getReportPhotoUri,
+  isReportDocumentMedia,
+  DISASTER_CATEGORY_PHOTOS,
+} from "../../utils/reportMedia";
 
 type ReportItemProps = {
   report: Report;
@@ -94,6 +100,11 @@ export const ReportItem = memo(
     const statusInfo = STATUS_LABELS[report.status] || STATUS_LABELS.submitted;
     const severityInfo =
       SEVERITY_LABELS[report.severity] || SEVERITY_LABELS.medium;
+    const [thumbError, setThumbError] = useState(false);
+    const photoUri = getReportPhotoUri(report);
+    const resolvedPhotoUri = thumbError
+      ? DISASTER_CATEGORY_PHOTOS[report.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
+      : photoUri;
 
     const formattedDate = new Date(report.createdAt).toLocaleDateString(
       "id-ID",
@@ -182,15 +193,31 @@ export const ReportItem = memo(
             </View>
           </View>
 
-          {/* Title */}
-          <Text style={styles.title} numberOfLines={2}>
-            {report.title}
-          </Text>
-
-          {/* Description */}
-          <Text style={styles.description} numberOfLines={3}>
-            {report.description}
-          </Text>
+          {/* Title, Description & Photo Thumbnail Row */}
+          <View style={styles.bodyRow}>
+            <View style={styles.bodyTextContainer}>
+              <Text style={styles.title} numberOfLines={2}>
+                {report.title}
+              </Text>
+              <Text style={styles.description} numberOfLines={2}>
+                {report.description}
+              </Text>
+            </View>
+            {isReportDocumentMedia(report) ? (
+              <View style={styles.thumbnailDocBox}>
+                <Text style={styles.thumbnailDocIcon}>📄</Text>
+                <Text style={styles.thumbnailDocLabel}>PDF</Text>
+              </View>
+            ) : (
+              <Image
+                source={{ uri: resolvedPhotoUri }}
+                style={styles.thumbnailPhoto}
+                contentFit="cover"
+                transition={150}
+                onError={() => setThumbError(true)}
+              />
+            )}
+          </View>
 
           {/* Metadata & Actions Footer */}
           <View style={styles.footerRow}>
@@ -253,6 +280,7 @@ export const ReportItem = memo(
       prevProps.report.status === nextProps.report.status &&
       prevProps.report.severity === nextProps.report.severity &&
       prevProps.report.category === nextProps.report.category &&
+      prevProps.report.mediaPath === nextProps.report.mediaPath &&
       prevProps.report.isSimulation === nextProps.report.isSimulation &&
       prevProps.report.title === nextProps.report.title &&
       prevProps.report.description === nextProps.report.description &&
@@ -333,8 +361,45 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: "800",
     color: "#0F172A",
-    marginBottom: 6,
-    lineHeight: 20,
+    marginBottom: 4,
+    lineHeight: 19,
+  },
+  bodyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 8,
+  },
+  bodyTextContainer: {
+    flex: 1,
+  },
+  thumbnailPhoto: {
+    width: 68,
+    height: 68,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  thumbnailDocBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbnailDocIcon: {
+    fontSize: 24,
+    marginBottom: 2,
+  },
+  thumbnailDocLabel: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#166534",
   },
   description: {
     fontSize: 12.5,

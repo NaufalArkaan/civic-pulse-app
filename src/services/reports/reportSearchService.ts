@@ -1,20 +1,13 @@
 /**
- * Civic Pulse - Pertemuan 11
+ * Civic Pulse - Pertemuan 11–13
  * Service: RxJS Reactive Search & Filter Pipeline
- * Role: Anggota 1 & Anggota 2 (Syahril) Integration Baseline
+ * Role: Anggota 1 (Naufal) & Anggota 2 (Syahril)
  *
- * RxJS Pipeline Specification:
- * criteria$.pipe(
- *   debounceTime(300),
- *   distinctUntilChanged(areSearchCriteriaEqual),
- *   switchMap((criteria) => executeSearch(criteria))
- * )
- *
- * Reliability & UX Safeguards:
- * 1. Query dinormalisasi (trim & lowercase) sebelum komparasi distinct.
- * 2. switchMap membatalkan hasil pencarian lama saat kriteria baru masuk.
- * 3. catchError di inner observable memastikan stream TIDAK PERNAH mati saat terjadi error.
- * 4. Fallback transparan ke cache SQLite saat offline dengan penanda isFromCache.
+ * Reliability & Immediate Update Safeguards:
+ * 1. Debounced search (300ms) + distinctUntilChanged untuk pengetikan kata kunci.
+ * 2. Immediate refresh & optimistic in-place report update (`applyImmediateReportUpdate`)
+ *    agar klik tombol "Verifikasi", "Proses", dan "Selesai" langsung memperbarui UI (<16ms)
+ *    tanpa terblokir oleh `distinctUntilChanged`!
  */
 
 import {
@@ -34,7 +27,9 @@ import {
   SearchCriteria,
   SearchResultsState,
   areSearchCriteriaEqual,
+  normalizeQuery,
 } from "../../types/search";
+import { Report } from "../../types/report";
 import { reportRepository } from "./reportRepository";
 import { classifyAppError } from "../../utils/errorTaxonomy";
 
@@ -63,23 +58,17 @@ export class ReportSearchService {
   private initPipeline(): void {
     this.pipelineSubscription = this.criteriaSubject
       .pipe(
-        // 1. Debounce 300ms untuk mencegah request berlebihan saat mengetik cepat
         debounceTime(300),
-        // 2. Distinct comparator: hanya kirim jika nilai query/filter berubah secara substantif
         distinctUntilChanged(areSearchCriteriaEqual),
-        // 3. switchMap: membatalkan request lama ketika ada query baru
         switchMap((criteria) => {
           return this.executeSearch(criteria).pipe(
-            // Loading state saat pencarian baru dimulai
             startWith<SearchResultsState>({
               reports: this.resultsSubject.value.reports,
               loading: true,
               error: null,
-              isFromCache: false,
+              isFromCache: this.resultsSubject.value.isFromCache,
               criteria,
             }),
-            // Tangani error di inner observable agar stream utama tidak berhenti
-            // Pertahankan data cache yang sudah ada agar layar tidak kosong saat refresh gagal (Check 2)
             catchError((err) => {
               const previousReports = this.resultsSubject.value.reports;
               const classified = classifyAppError(err);
@@ -100,7 +89,7 @@ export class ReportSearchService {
   }
 
   /**
-   * Eksekusi pencarian laporan melalui ReportRepository (Supabase PostgREST -> Fallback SQLite Cache)
+   * Eksekusi pencarian laporan melalui ReportRepository
    */
   private executeSearch(criteria: SearchCriteria): Observable<SearchResultsState> {
     return of(null).pipe(
@@ -122,10 +111,58 @@ export class ReportSearchService {
   }
 
   /**
+   * Memperbarui satu item laporan di dalam stream secara instan (<16ms)
+   * ketika pengguna menekan tombol "Verifikasi", "Proses", atau "Selesai",
+   * atau ketika laporan baru ditambahkan.
+   */
+  applyImmediateReportUpdate(updatedReport: Report): void {
+    const currentState = this.resultsSubject.value;
+    const criteria = this.criteriaSubject.value;
+
+    const norm = normalizeQuery(criteria.query);
+    const matchesCategory =
+      !criteria.category || criteria.category === "all" || updatedReport.category === criteria.category;
+    const matchesStatus =
+      !criteria.status || criteria.status === "all" || updatedReport.status === criteria.status;
+    const matchesQuery =
+      !norm ||
+      updatedReport.title.toLowerCase().includes(norm) ||
+      updatedReport.description.toLowerCase().includes(norm);
+
+    const existsIndex = currentState.reports.findIndex((r) => r.id === updatedReport.id);
+    let nextReports = [...currentState.reports];
+
+    if (matchesCategory && matchesStatus && matchesQuery) {
+      if (existsIndex >= 0) {
+        nextReports[existsIndex] = updatedReport;
+      } else {
+        nextReports = [updatedReport, ...nextReports];
+      }
+    } else if (existsIndex >= 0) {
+      // Jika filter status aktif (misal sedang filter 'submitted') dan status berubah ke 'verified', keluarkan dari filter tersebut
+      nextReports.splice(existsIndex, 1);
+    }
+
+    this.resultsSubject.next({
+      ...currentState,
+      reports: nextReports,
+      loading: false,
+      error: null,
+    });
+  }
+
+  /**
    * Stream observable hasil pencarian reaktif untuk dikonsumsi UI
    */
   get searchResults$(): Observable<SearchResultsState> {
     return this.resultsSubject.asObservable();
+  }
+
+  /**
+   * Mengambil snapshot state pencarian saat ini secara sinkron
+   */
+  getSnapshot(): SearchResultsState {
+    return this.resultsSubject.value;
   }
 
   /**
@@ -147,17 +184,27 @@ export class ReportSearchService {
   }
 
   /**
-   * Mengambil snapshot hasil pencarian saat ini secara sinkron
-   */
-  getSnapshot(): SearchResultsState {
-    return this.resultsSubject.value;
-  }
-
-  /**
-   * Memicu refresh ulang pencarian secara manual
+   * Memicu refresh pencarian secara langsung tanpa terblokir oleh distinctUntilChanged
    */
   refresh(): void {
-    this.criteriaSubject.next({ ...this.criteriaSubject.value });
+    const criteria = this.criteriaSubject.value;
+    this.executeSearch(criteria)
+      .pipe(
+        catchError((err) => {
+          const previousReports = this.resultsSubject.value.reports;
+          const classified = classifyAppError(err);
+          return of<SearchResultsState>({
+            reports: previousReports,
+            loading: false,
+            error: classified.userMessage,
+            isFromCache: previousReports.length > 0,
+            criteria,
+          });
+        })
+      )
+      .subscribe((state) => {
+        this.resultsSubject.next(state);
+      });
   }
 
   /**
