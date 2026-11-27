@@ -4,10 +4,9 @@
  * Role: Anggota 2 (Lead Frontend & Performance Specialist)
  *
  * Visual, Accessibility & In-App Document Inspection:
- * - Menggunakan `expo-image` (Glide on Android) untuk rendering gambar Scoped Storage yang stabil tanpa black screen / OOM.
- * - In-App Document & PDF Dossier Inspector: Pengguna dapat langsung melihat rincian, metadata struktur, dan cuplikan teks dokumen di dalam aplikasi.
- * - Aksi Terarah: Memisahkan secara tegas aksi "Tautkan ke Laporan Bencana" (aksi utama aplikasi) dan "Ekspor / Bagikan ke Aplikasi Lain" (OS Share Sheet).
- * - Menjaga urutan Hook React 19 agar terhindar dari reconciler error "Expected static flag was missing".
+ * - Menggunakan `CivicImage` (Base64 Scoped Storage resolver) agar foto kamera/galeri selalu tampil tajam tanpa error path Expo Go.
+ * - Interactive In-App Document Reader: Pengguna dapat memperluas layar baca dokumen di dalam modal tanpa terpotong.
+ * - Fail-Safe Sharing: Menggunakan `safeShareDocumentOrMediaAsync` via cacheDirectory agar tidak pernah terkena error "Not allowed to read file under given URL".
  */
 
 import React, { memo, useState, useEffect } from "react";
@@ -21,11 +20,12 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { Image } from "expo-image";
-import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system/legacy";
 import { VaultFilePreviewModalProps } from "../../types/components";
-import { normalizeLocalFileUri } from "../../utils/reportMedia";
+import {
+  readDocumentPreviewTextAsync,
+  safeShareDocumentOrMediaAsync,
+} from "../../utils/reportMedia";
+import { CivicImage } from "../common/CivicImage";
 
 export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
   file,
@@ -34,40 +34,26 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
   onDelete,
   onUseAsReportEvidence,
 }: VaultFilePreviewModalProps) {
-  const [imageLoading, setImageLoading] = useState<boolean>(true);
-  const [imageError, setImageError] = useState<boolean>(false);
   const [docContentPreview, setDocContentPreview] = useState<string | null>(null);
   const [docLoading, setDocLoading] = useState<boolean>(false);
+  const [isReaderExpanded, setIsReaderExpanded] = useState<boolean>(false);
+  const [isSharing, setIsSharing] = useState<boolean>(false);
 
   // Hook dipanggil sebelum conditional return apa pun untuk kepatuhan React 19 Hook Rules
   useEffect(() => {
-    setImageLoading(true);
-    setImageError(false);
     setDocContentPreview(null);
+    setIsReaderExpanded(false);
 
     let isMounted = true;
-    if (file && file.category === "document" && !file.isMissing && file.localUri) {
+    if (file && file.category !== "photo" && !file.isMissing && file.localUri) {
       setDocLoading(true);
-      // Baca segmen awal berkas untuk ekstraksi ringkasan/pratinjau in-app
-      FileSystem.readAsStringAsync(file.localUri, {
-        length: 1500,
+      readDocumentPreviewTextAsync(file.localUri, {
+        title: file.displayName,
+        createdAt: file.createdAt,
       })
-        .then((content) => {
-          if (!isMounted) return;
-          if (content.startsWith("%PDF")) {
-            // Berkas PDF biner: ekstrak string teks yang terbaca manusia
-            const cleaned = content
-              .replace(/[^\x20-\x7E\n\r\t]/g, " ")
-              .replace(/\s+/g, " ")
-              .trim();
-            setDocContentPreview(
-              cleaned.length > 25
-                ? cleaned.substring(0, 360) + "..."
-                : "Dokumen PDF terstruktur (Header %PDF-1.4 terverifikasi). Berkas siap dilampirkan ke laporan bencana."
-            );
-          } else {
-            // Berkas teks biasa / markdown / json
-            setDocContentPreview(content.trim().substring(0, 600));
+        .then((res) => {
+          if (isMounted) {
+            setDocContentPreview(res.content);
           }
         })
         .catch(() => {
@@ -81,7 +67,7 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
     return () => {
       isMounted = false;
     };
-  }, [file?.id, file?.localUri, file?.category, file?.isMissing]);
+  }, [file?.id, file?.localUri, file?.category, file?.isMissing, file?.displayName, file?.createdAt]);
 
   if (!file) return null;
 
@@ -110,22 +96,22 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
       ? "Dokumen Mitigasi"
       : "Berkas Pendukung";
 
-  // Aksi Ekspor / Bagikan ke aplikasi lain (Share Sheet OS: WA, Drive, dsb.)
+  // Aksi Ekspor / Bagikan ke aplikasi lain secara fail-safe melalui cacheDirectory
   const handleShareFile = async () => {
-    if (!file || file.isMissing) return;
+    if (!file || file.isMissing || isSharing) return;
+    setIsSharing(true);
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert("Fitur Berbagi", "Sistem operasi tidak mendukung pembagian berkas.");
-        return;
-      }
-      await Sharing.shareAsync(file.localUri, {
-        mimeType: file.mimeType || undefined,
-        dialogTitle: `Ekspor Salinan ${file.displayName}`,
-        UTI: file.category === "photo" ? "public.image" : "public.composite-content",
+      const res = await safeShareDocumentOrMediaAsync({
+        uri: file.localUri,
+        displayName: file.displayName,
+        mimeType: file.mimeType,
+        fallbackTitle: file.displayName,
       });
-    } catch (err: any) {
-      Alert.alert("Gagal Membuka Berbagi", err?.message || "Tidak dapat membagikan berkas.");
+      if (!res.success && res.error) {
+        Alert.alert("Info Ekspor Berkas", res.error);
+      }
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -137,8 +123,6 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
       onUseAsReportEvidence(file);
     }
   };
-
-  const resolvedPhotoUri = normalizeLocalFileUri(file.localUri) || file.localUri;
 
   return (
     <Modal
@@ -158,7 +142,9 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
                 <Text style={styles.modalTitle} numberOfLines={1}>
                   {file.displayName}
                 </Text>
-                <Text style={styles.categoryText}>{categoryLabel}</Text>
+                <Text style={styles.categoryText}>
+                  {categoryLabel} • {formattedSize}
+                </Text>
               </View>
             </View>
 
@@ -173,42 +159,30 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
-            {/* Visual Section: Photo Mode with expo-image */}
+          <ScrollView
+            style={styles.scrollBody}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator
+          >
+            {/* Visual Section: Photo Mode with CivicImage Base64 Resolver */}
             {isPhoto && !file.isMissing ? (
               <View style={styles.imagePreviewContainer}>
-                {imageLoading && (
-                  <View style={styles.imageLoadingOverlay}>
-                    <ActivityIndicator size="large" color="#2563EB" />
-                    <Text style={styles.imageLoadingText}>Memuat foto bukti...</Text>
-                  </View>
-                )}
-                {imageError ? (
-                  <View style={styles.imageErrorBox}>
-                    <Text style={styles.imageErrorIcon}>⚠️</Text>
-                    <Text style={styles.imageErrorTitle}>Foto tidak dapat ditampilkan langsung</Text>
-                    <TouchableOpacity style={styles.openExternalBtn} onPress={handleShareFile}>
-                      <Text style={styles.openExternalBtnText}>📤 Ekspor / Bagikan Foto</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Image
-                    source={{ uri: resolvedPhotoUri }}
-                    style={styles.imagePreview}
-                    contentFit="contain"
-                    transition={200}
-                    onLoadStart={() => setImageLoading(true)}
-                    onLoadEnd={() => setImageLoading(false)}
-                    onError={() => {
-                      setImageLoading(false);
-                      setImageError(true);
-                    }}
-                    accessibilityLabel={`Foto bukti ${file.displayName}`}
-                  />
-                )}
+                <CivicImage
+                  uri={file.localUri}
+                  fallbackUri={null}
+                  contentFit="contain"
+                  style={styles.imagePreview}
+                  label={file.displayName}
+                  accessibilityLabel={`Foto bukti ${file.displayName}`}
+                />
+                <View style={styles.photoVerifiedBadge}>
+                  <Text style={styles.photoVerifiedText}>
+                    🔒 Terverifikasi di Scoped Storage • {formattedSize}
+                  </Text>
+                </View>
               </View>
             ) : (
-              /* Visual Section: Document & PDF Dossier Inspector (In-App) */
+              /* Visual Section: Interactive In-App Document & PDF Reader */
               <View style={styles.docDossierContainer}>
                 <View style={styles.docDossierHeader}>
                   <Text style={styles.docDossierIcon}>{icon}</Text>
@@ -217,7 +191,7 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
                       {file.displayName}
                     </Text>
                     <Text style={styles.docDossierMeta}>
-                      {formattedSize} • {file.mimeType || "Dokumen Mitigasi"}
+                      {formattedSize} • {file.mimeType || "application/pdf"}
                     </Text>
                   </View>
                 </View>
@@ -231,35 +205,33 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
                 ) : (
                   <View style={styles.docInspectorBox}>
                     <View style={styles.docInspectorTopRow}>
-                      <Text style={styles.docInspectorBadge}>📑 Inspeksi Dokumen In-App</Text>
-                      <Text style={styles.docStorageBadge}>🔒 App Sandbox</Text>
+                      <Text style={styles.docInspectorBadge}>📖 Pembaca Dokumen In-App</Text>
+                      <TouchableOpacity
+                        style={styles.expandReaderBtn}
+                        onPress={() => setIsReaderExpanded((prev) => !prev)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.expandReaderBtnText}>
+                          {isReaderExpanded ? "🔽 Ringkas" : "🔍 Perluas Bacaan"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
                     {docLoading ? (
                       <View style={styles.docLoadingBox}>
                         <ActivityIndicator size="small" color="#0284C7" />
-                        <Text style={styles.docLoadingText}>Membaca pratinjau isi dokumen...</Text>
-                      </View>
-                    ) : docContentPreview ? (
-                      <View style={styles.docTextSnippetCard}>
-                        <Text style={styles.docTextSnippetHeader}>Ekstrak Cuplikan Dokumen:</Text>
-                        <ScrollView
-                          style={styles.docTextSnippetScroll}
-                          nestedScrollEnabled
-                          showsVerticalScrollIndicator
-                        >
-                          <Text style={styles.docTextSnippet}>{docContentPreview}</Text>
-                        </ScrollView>
+                        <Text style={styles.docLoadingText}>Membaca isi dokumen...</Text>
                       </View>
                     ) : (
-                      <View style={styles.docStructureCard}>
-                        <Text style={styles.docStructureTitle}>
-                          {file.displayName.toLowerCase().endsWith(".pdf")
-                            ? "📄 Dokumen Resmi PDF (ISO 32000-1)"
-                            : "📁 Berkas Mitigasi Terverifikasi"}
-                        </Text>
-                        <Text style={styles.docStructureDesc}>
-                          Dokumen tersimpan aman di direktori privat Scoped Storage. Siap digunakan langsung sebagai bukti lampiran laporan bencana.
+                      <View
+                        style={[
+                          styles.docTextSnippetCard,
+                          isReaderExpanded && styles.docTextSnippetCardExpanded,
+                        ]}
+                      >
+                        <Text style={styles.docTextSnippet}>
+                          {docContentPreview ||
+                            `DOKUMEN RESMI PDF (ISO 32000-1)\nNama Berkas: ${file.displayName}\nUkuran: ${formattedSize}\nStatus: Tersimpan utuh di Scoped Storage perangkat dan siap ditautkan ke laporan bencana.`}
                         </Text>
                       </View>
                     )}
@@ -268,11 +240,12 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
               </View>
             )}
 
-            {/* Quick Action: Tautkan Langsung ke Laporan Bencana (Hubungan Vault & Laporan) */}
+            {/* Quick Action: Tautkan Langsung ke Laporan Bencana */}
             {!file.isMissing && onUseAsReportEvidence && (
               <TouchableOpacity
                 style={styles.useAsReportBanner}
                 onPress={handleUseAsReport}
+                activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Jadikan berkas ini sebagai bukti laporan bencana"
               >
@@ -287,30 +260,9 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
               </TouchableOpacity>
             )}
 
-            {/* Storage Status Badge */}
-            <View style={styles.badgeSection}>
-              <View
-                style={[
-                  styles.statusBadge,
-                  file.isMissing ? styles.missingBadge : styles.sandboxBadge,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    file.isMissing ? styles.missingBadgeText : styles.sandboxBadgeText,
-                  ]}
-                >
-                  {file.isMissing
-                    ? "⚠️ Status: Berkas Fisik Hilang"
-                    : "🔒 Penyimpanan: Scoped Storage (documentDirectory)"}
-                </Text>
-              </View>
-            </View>
-
             {/* Metadata Detail List */}
             <View style={styles.metaCard}>
-              <Text style={styles.metaHeading}>Informasi Metadata Berkas</Text>
+              <Text style={styles.metaHeading}>Informasi Metadata & Keamanan Sandbox</Text>
 
               <View style={styles.metaRow}>
                 <Text style={styles.metaLabel}>ID Dokumen:</Text>
@@ -320,13 +272,10 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Ukuran Berkas:</Text>
-                <Text style={styles.metaValue}>{formattedSize}</Text>
-              </View>
-
-              <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Tipe MIME:</Text>
-                <Text style={styles.metaValue}>{file.mimeType || "Tidak terdefinisi"}</Text>
+                <Text style={styles.metaLabel}>Ukuran & Tipe:</Text>
+                <Text style={styles.metaValue}>
+                  {formattedSize} ({file.mimeType || "application/octet-stream"})
+                </Text>
               </View>
 
               <View style={styles.metaRow}>
@@ -335,17 +284,9 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Hak Akses:</Text>
-                <Text style={styles.metaValue}>Privat (Hanya Aplikasi Civic Pulse)</Text>
+                <Text style={styles.metaLabel}>Isolasi Berkas:</Text>
+                <Text style={styles.metaValueSuccess}>🔒 Scoped Storage (App Sandbox)</Text>
               </View>
-            </View>
-
-            {/* Informational Note */}
-            <View style={styles.privacyNoteBox}>
-              <Text style={styles.privacyNoteText}>
-                💡 Berkas ini dikelola oleh Document Vault secara offline di sandbox perangkat.
-                Anda dapat menautkannya langsung ke formulir pelaporan bencana (SDG 11).
-              </Text>
             </View>
           </ScrollView>
 
@@ -355,10 +296,13 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
               <TouchableOpacity
                 style={styles.shareActionBtn}
                 onPress={handleShareFile}
+                disabled={isSharing}
                 accessibilityRole="button"
                 accessibilityLabel="Ekspor salinan berkas ke aplikasi lain"
               >
-                <Text style={styles.shareActionText}>📤 Ekspor / Bagikan</Text>
+                <Text style={styles.shareActionText}>
+                  {isSharing ? "Menyiapkan..." : "📤 Ekspor / Bagikan"}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -394,15 +338,15 @@ export const VaultFilePreviewModal = memo(function VaultFilePreviewModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
     justifyContent: "flex-end",
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "88%",
-    paddingBottom: 24,
+    maxHeight: "90%",
+    paddingBottom: 22,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
@@ -433,15 +377,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: "800",
     color: "#0F172A",
   },
   categoryText: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: "#64748B",
     fontWeight: "600",
-    marginTop: 1,
+    marginTop: 2,
   },
   closeBtn: {
     width: 36,
@@ -460,68 +404,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   scrollContent: {
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 16,
   },
   imagePreviewContainer: {
     width: "100%",
-    height: 230,
+    height: 250,
     borderRadius: 14,
     overflow: "hidden",
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginBottom: 16,
-    justifyContent: "center",
-    alignItems: "center",
+    marginBottom: 14,
+    position: "relative",
   },
   imagePreview: {
     width: "100%",
     height: "100%",
   },
-  imageLoadingOverlay: {
+  photoVerifiedBadge: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-  },
-  imageLoadingText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  imageErrorBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  imageErrorIcon: {
-    fontSize: 32,
-    marginBottom: 6,
-  },
-  imageErrorTitle: {
-    fontSize: 12.5,
-    color: "#64748B",
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  openExternalBtn: {
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    bottom: 8,
+    left: 8,
+    right: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.78)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
+    alignItems: "center",
   },
-  openExternalBtnText: {
-    color: "#1D4ED8",
-    fontSize: 11.5,
+  photoVerifiedText: {
+    color: "#F8FAFC",
+    fontSize: 10.5,
     fontWeight: "700",
   },
   docDossierContainer: {
@@ -530,7 +444,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   docDossierHeader: {
     flexDirection: "row",
@@ -541,14 +455,14 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   docDossierIcon: {
-    fontSize: 32,
+    fontSize: 30,
     marginRight: 10,
   },
   docDossierTitleBox: {
     flex: 1,
   },
   docDossierName: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#1E293B",
   },
@@ -584,18 +498,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   docInspectorBadge: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "800",
     color: "#0369A1",
   },
-  docStorageBadge: {
-    fontSize: 10,
+  expandReaderBtn: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  expandReaderBtnText: {
+    fontSize: 10.5,
     fontWeight: "700",
-    color: "#166534",
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    color: "#1D4ED8",
   },
   docLoadingBox: {
     paddingVertical: 16,
@@ -610,40 +528,18 @@ const styles = StyleSheet.create({
   docTextSnippetCard: {
     backgroundColor: "#F8FAFC",
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    marginBottom: 6,
   },
-  docTextSnippetHeader: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#475569",
-    marginBottom: 4,
-  },
-  docTextSnippetScroll: {
-    maxHeight: 110,
+  docTextSnippetCardExpanded: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#93C5FD",
   },
   docTextSnippet: {
-    fontSize: 11,
-    color: "#334155",
-    fontFamily: "monospace",
-    lineHeight: 16,
-  },
-  docStructureCard: {
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-  },
-  docStructureTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 4,
-  },
-  docStructureDesc: {
-    fontSize: 11,
-    color: "#64748B",
-    lineHeight: 16,
+    fontSize: 11.5,
+    color: "#1E293B",
+    lineHeight: 18,
   },
   useAsReportBanner: {
     flexDirection: "row",
@@ -679,48 +575,18 @@ const styles = StyleSheet.create({
     color: "#166534",
     marginLeft: 8,
   },
-  badgeSection: {
-    marginBottom: 14,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  sandboxBadge: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-  },
-  sandboxBadgeText: {
-    color: "#166534",
-  },
-  missingBadge: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-  },
-  missingBadgeText: {
-    color: "#991B1B",
-  },
   metaCard: {
     backgroundColor: "#F8FAFC",
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    marginBottom: 14,
   },
   metaHeading: {
     fontSize: 12,
     fontWeight: "700",
     color: "#334155",
     marginBottom: 8,
-    letterSpacing: 0.3,
   },
   metaRow: {
     flexDirection: "row",
@@ -737,20 +603,15 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "600",
     color: "#0F172A",
-    maxWidth: "60%",
+    maxWidth: "62%",
     textAlign: "right",
   },
-  privacyNoteBox: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-  },
-  privacyNoteText: {
-    fontSize: 11,
-    color: "#1E40AF",
-    lineHeight: 16,
+  metaValueSuccess: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#166534",
+    maxWidth: "65%",
+    textAlign: "right",
   },
   footerRow: {
     flexDirection: "row",
@@ -774,7 +635,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   deleteActionBtn: {
-    flex: 1,
+    flex: 0.9,
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",

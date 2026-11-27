@@ -21,8 +21,6 @@ import {
   useWindowDimensions,
   Alert,
 } from "react-native";
-import { Image } from "expo-image";
-import * as Sharing from "expo-sharing";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,7 +36,9 @@ import {
   isReportDocumentMedia,
   getReportMediaFilename,
   DISASTER_CATEGORY_PHOTOS,
+  safeShareDocumentOrMediaAsync,
 } from "../../utils/reportMedia";
+import { CivicImage } from "../common/CivicImage";
 
 const CATEGORY_META: Record<
   CivicReportCategory,
@@ -105,29 +105,21 @@ export const SelectedReportCard = memo(function SelectedReportCard({
   const bottomPosition = (insets?.bottom ?? 0) > 0 ? insets!.bottom + 12 : 20;
 
   const [isPhotoModalVisible, setIsPhotoModalVisible] = useState<boolean>(false);
-  const [imageError, setImageError] = useState<boolean>(false);
   const photoUri = getReportPhotoUri(report);
-  const activePhotoUri = imageError
-    ? DISASTER_CATEGORY_PHOTOS[report.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
-    : photoUri;
   const isDocument = isReportDocumentMedia(report);
   const isVaultMedia = isReportUsingVaultMedia(report);
   const mediaFilename = getReportMediaFilename(report);
 
   const handleOpenDocument = async () => {
     if (!report.mediaPath) return;
-    try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert("Fitur Berbagi", "Sistem operasi tidak mendukung pembukaan berkas.");
-        return;
-      }
-      await Sharing.shareAsync(report.mediaPath, {
-        dialogTitle: `Buka Dokumen Bukti ${report.title}`,
-        UTI: "public.composite-content",
-      });
-    } catch (err: any) {
-      Alert.alert("Gagal Membuka Berkas", err?.message || "Tidak dapat membuka dokumen.");
+    const res = await safeShareDocumentOrMediaAsync({
+      uri: report.mediaPath,
+      displayName: mediaFilename || `Bukti_${report.id}.pdf`,
+      fallbackTitle: report.title,
+      fallbackDescription: report.description,
+    });
+    if (!res.success && res.error) {
+      Alert.alert("Info Dokumen", res.error);
     }
   };
 
@@ -251,12 +243,12 @@ export const SelectedReportCard = memo(function SelectedReportCard({
           accessibilityRole="imagebutton"
           accessibilityLabel="Foto bukti bencana atau kerusakan. Ketuk untuk memperbesar."
         >
-          <Image
-            source={{ uri: activePhotoUri }}
+          <CivicImage
+            uri={photoUri}
+            fallbackUri={DISASTER_CATEGORY_PHOTOS[report.category]}
+            category={report.category}
             style={styles.disasterPhoto}
-            contentFit="cover"
-            transition={150}
-            onError={() => setImageError(true)}
+            label={report.title}
           />
           <View
             style={[
@@ -317,12 +309,13 @@ export const SelectedReportCard = memo(function SelectedReportCard({
             </TouchableOpacity>
           </View>
 
-          <Image
-            source={{ uri: activePhotoUri }}
-            style={styles.photoModalFullImage}
+          <CivicImage
+            uri={photoUri}
+            fallbackUri={DISASTER_CATEGORY_PHOTOS[report.category]}
+            category={report.category}
             contentFit="contain"
-            transition={200}
-            onError={() => setImageError(true)}
+            style={styles.photoModalFullImage}
+            label={report.title}
           />
 
           <View style={styles.photoModalFooter}>

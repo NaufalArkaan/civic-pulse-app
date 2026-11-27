@@ -21,11 +21,9 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from "react-native";
-import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import * as Sharing from "expo-sharing";
 
 import { Report, ReportStatus } from "../types/report";
 import { useReportSearch } from "../hooks/useReportSearch";
@@ -37,6 +35,8 @@ import {
   isReportDocumentMedia,
   getReportMediaFilename,
   DISASTER_CATEGORY_PHOTOS,
+  readDocumentPreviewTextAsync,
+  safeShareDocumentOrMediaAsync,
 } from "../utils/reportMedia";
 import {
   ReportSearchBar,
@@ -45,7 +45,7 @@ import {
   ReportList,
   ReportCreateModal,
 } from "../components/reports";
-import { AnimatedPressable, FeedbackToast } from "../components/common";
+import { AnimatedPressable, FeedbackToast, CivicImage } from "../components/common";
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
@@ -57,12 +57,32 @@ export default function ReportsScreen() {
   }>();
   const { width, height, centeredContainerStyle } = useResponsiveLayout();
 
-  // State untuk modal detail laporan
+  // State untuk modal detail laporan & pembaca dokumen in-app
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [detailPhotoError, setDetailPhotoError] = useState<boolean>(false);
+  const [detailDocPreview, setDetailDocPreview] = useState<string | null>(null);
+  const [isDocReaderVisible, setIsDocReaderVisible] = useState<boolean>(true);
+  const [isExportingDoc, setIsExportingDoc] = useState<boolean>(false);
 
   useEffect(() => {
-    setDetailPhotoError(false);
+    setDetailDocPreview(null);
+    setIsDocReaderVisible(true);
+
+    let isMounted = true;
+    if (selectedReport && isReportDocumentMedia(selectedReport)) {
+      readDocumentPreviewTextAsync(selectedReport.mediaPath, {
+        title: selectedReport.title,
+        description: selectedReport.description,
+        category: selectedReport.category,
+        createdAt: selectedReport.createdAt,
+      }).then((res) => {
+        if (isMounted) {
+          setDetailDocPreview(res.content);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
   }, [selectedReport]);
 
   // State untuk modal pembuatan laporan baru (Supabase Backed)
@@ -75,23 +95,24 @@ export default function ReportsScreen() {
     }
   }, [params?.createWithVaultUri]);
 
-  // Handler membuka berkas dokumen lampiran
+  // Handler membuka/mengekspor berkas dokumen lampiran secara fail-safe
   const handleOpenDetailDoc = useCallback(async () => {
-    if (!selectedReport?.mediaPath) return;
+    if (!selectedReport?.mediaPath || isExportingDoc) return;
+    setIsExportingDoc(true);
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert("Fitur Berbagi", "Sistem operasi tidak mendukung pembukaan berkas.");
-        return;
-      }
-      await Sharing.shareAsync(selectedReport.mediaPath, {
-        dialogTitle: `Buka Dokumen Bukti ${selectedReport.title}`,
-        UTI: "public.composite-content",
+      const res = await safeShareDocumentOrMediaAsync({
+        uri: selectedReport.mediaPath,
+        displayName: getReportMediaFilename(selectedReport) || `Bukti_${selectedReport.id}.pdf`,
+        fallbackTitle: selectedReport.title,
+        fallbackDescription: selectedReport.description,
       });
-    } catch (err: any) {
-      Alert.alert("Gagal Membuka Berkas", err?.message || "Tidak dapat membuka dokumen.");
+      if (!res.success && res.error) {
+        Alert.alert("Info Ekspor Dokumen", res.error);
+      }
+    } finally {
+      setIsExportingDoc(false);
     }
-  }, [selectedReport]);
+  }, [selectedReport, isExportingDoc]);
 
   // State umpan balik mikro (Toast) dengan tipe jujur (success / error / info)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -389,37 +410,62 @@ export default function ReportsScreen() {
             <ScrollView style={styles.modalBody}>
               {/* Bukti Media Terlampir (Foto atau Dokumen PDF dari Document Vault) */}
               {selectedReport && isReportDocumentMedia(selectedReport) ? (
-                <View style={styles.detailDocCard}>
-                  <Text style={styles.detailDocIcon}>📄</Text>
-                  <View style={styles.detailDocTextGroup}>
-                    <Text style={styles.detailDocTitle} numberOfLines={1}>
-                      {getReportMediaFilename(selectedReport)}
-                    </Text>
-                    <Text style={styles.detailDocBadge}>
-                      🔒 Dokumen Bukti Lapangan (Document Vault)
-                    </Text>
+                <View style={styles.detailDocContainer}>
+                  <View style={styles.detailDocCard}>
+                    <Text style={styles.detailDocIcon}>📄</Text>
+                    <View style={styles.detailDocTextGroup}>
+                      <Text style={styles.detailDocTitle} numberOfLines={1}>
+                        {getReportMediaFilename(selectedReport)}
+                      </Text>
+                      <Text style={styles.detailDocBadge}>
+                        🔒 Dokumen Bukti Lapangan (Document Vault)
+                      </Text>
+                    </View>
                   </View>
-                  <AnimatedPressable
-                    style={styles.detailDocOpenBtn}
-                    onPress={handleOpenDetailDoc}
-                    accessibilityRole="button"
-                    accessibilityLabel="Ekspor atau bagikan dokumen PDF lampiran"
-                  >
-                    <Text style={styles.detailDocOpenText}>📤 Ekspor / Bagikan PDF</Text>
-                  </AnimatedPressable>
+
+                  <View style={styles.detailDocActionRow}>
+                    <AnimatedPressable
+                      style={styles.detailDocToggleBtn}
+                      onPress={() => setIsDocReaderVisible((prev) => !prev)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Tampilkan atau sembunyikan isi dokumen"
+                    >
+                      <Text style={styles.detailDocToggleText}>
+                        {isDocReaderVisible ? "🔽 Tutup Bacaan" : "📖 Baca Dokumen In-App"}
+                      </Text>
+                    </AnimatedPressable>
+
+                    <AnimatedPressable
+                      style={styles.detailDocOpenBtn}
+                      onPress={handleOpenDetailDoc}
+                      accessibilityRole="button"
+                      accessibilityLabel="Ekspor atau bagikan dokumen PDF lampiran"
+                    >
+                      <Text style={styles.detailDocOpenText}>
+                        {isExportingDoc ? "Menyiapkan..." : "📤 Ekspor PDF"}
+                      </Text>
+                    </AnimatedPressable>
+                  </View>
+
+                  {isDocReaderVisible && detailDocPreview && (
+                    <View style={styles.detailDocPreviewBox}>
+                      <Text style={styles.detailDocPreviewHeader}>
+                        📑 Isi Dokumen Lampiran (In-App Reader):
+                      </Text>
+                      <Text style={styles.detailDocPreviewText}>
+                        {detailDocPreview}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ) : selectedReport ? (
                 <View style={styles.detailPhotoContainer}>
-                  <Image
-                    source={{
-                      uri: detailPhotoError
-                        ? DISASTER_CATEGORY_PHOTOS[selectedReport.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
-                        : getReportPhotoUri(selectedReport),
-                    }}
+                  <CivicImage
+                    uri={getReportPhotoUri(selectedReport)}
+                    fallbackUri={DISASTER_CATEGORY_PHOTOS[selectedReport.category]}
+                    category={selectedReport.category}
                     style={styles.detailPhoto}
-                    contentFit="cover"
-                    transition={150}
-                    onError={() => setDetailPhotoError(true)}
+                    label={selectedReport.title}
                   />
                   <View style={styles.detailPhotoBadge}>
                     <Text style={styles.detailPhotoBadgeText}>
@@ -723,42 +769,88 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
-  detailDocCard: {
-    flexDirection: "row",
-    alignItems: "center",
+  detailDocContainer: {
     backgroundColor: "#F0FDF4",
     borderWidth: 1,
     borderColor: "#BBF7D0",
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 14,
   },
+  detailDocCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
   detailDocIcon: {
-    fontSize: 26,
+    fontSize: 28,
     marginRight: 10,
   },
   detailDocTextGroup: {
     flex: 1,
   },
   detailDocTitle: {
-    fontSize: 12.5,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
     color: "#166534",
   },
   detailDocBadge: {
     fontSize: 10.5,
     color: "#15803D",
     marginTop: 2,
+    fontWeight: "600",
+  },
+  detailDocActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  detailDocToggleBtn: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailDocToggleText: {
+    color: "#166534",
+    fontSize: 11.5,
+    fontWeight: "700",
   },
   detailDocOpenBtn: {
+    flex: 1,
     backgroundColor: "#166534",
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   detailDocOpenText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
+  },
+  detailDocPreviewBox: {
+    marginTop: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  detailDocPreviewHeader: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#15803D",
+    marginBottom: 4,
+  },
+  detailDocPreviewText: {
+    fontSize: 11,
+    color: "#334155",
+    lineHeight: 16.5,
   },
 });

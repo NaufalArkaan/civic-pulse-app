@@ -11,9 +11,8 @@
  * - Aksesibilitas penuh untuk screen reader (TalkBack & VoiceOver).
  */
 
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Image } from "expo-image";
 import Animated, {
     ReduceMotion,
     useAnimatedStyle,
@@ -26,6 +25,7 @@ import {
   isReportDocumentMedia,
   DISASTER_CATEGORY_PHOTOS,
 } from "../../utils/reportMedia";
+import { CivicImage } from "../common/CivicImage";
 
 type ReportItemProps = {
   report: Report;
@@ -100,11 +100,7 @@ export const ReportItem = memo(
     const statusInfo = STATUS_LABELS[report.status] || STATUS_LABELS.submitted;
     const severityInfo =
       SEVERITY_LABELS[report.severity] || SEVERITY_LABELS.medium;
-    const [thumbError, setThumbError] = useState(false);
     const photoUri = getReportPhotoUri(report);
-    const resolvedPhotoUri = thumbError
-      ? DISASTER_CATEGORY_PHOTOS[report.category] || DISASTER_CATEGORY_PHOTOS["road-damage"]
-      : photoUri;
 
     const formattedDate = new Date(report.createdAt).toLocaleDateString(
       "id-ID",
@@ -209,12 +205,13 @@ export const ReportItem = memo(
                 <Text style={styles.thumbnailDocLabel}>PDF</Text>
               </View>
             ) : (
-              <Image
-                source={{ uri: resolvedPhotoUri }}
+              <CivicImage
+                uri={photoUri}
+                fallbackUri={DISASTER_CATEGORY_PHOTOS[report.category]}
+                category={report.category}
+                compact
                 style={styles.thumbnailPhoto}
-                contentFit="cover"
-                transition={150}
-                onError={() => setThumbError(true)}
+                accessibilityLabel={`Thumbnail laporan ${report.title}`}
               />
             )}
           </View>

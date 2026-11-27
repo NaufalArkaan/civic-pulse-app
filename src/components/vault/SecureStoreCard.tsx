@@ -189,15 +189,21 @@ export const SecureStoreCard = memo(function SecureStoreCard() {
 
         <View style={styles.fieldRow}>
           <Text style={styles.fieldLabel}>NIK Pelapor:</Text>
-          <Text style={styles.fieldValue}>
+          <Text style={styles.fieldValue} numberOfLines={1}>
             {showPlainValues ? storedNIK || "Belum disetel" : maskNIK(storedNIK)}
           </Text>
         </View>
         <View style={styles.fieldRow}>
           <Text style={styles.fieldLabel}>Sesi Keystore:</Text>
-          <Text style={[styles.fieldValue, { color: storedToken ? "#166534" : "#94A3B8" }]}>
+          <Text
+            style={[
+              styles.fieldValueStatus,
+              { color: storedToken ? "#166534" : "#94A3B8" },
+            ]}
+            numberOfLines={1}
+          >
             {storedToken
-              ? "🟢 Terenkripsi & Aktif Otomatis (Di Balik Layar)"
+              ? "🟢 Aktif & Terenkripsi Otomatis"
               : "⚪ Belum Ada Sesi"}
           </Text>
         </View>
@@ -222,7 +228,9 @@ export const SecureStoreCard = memo(function SecureStoreCard() {
           {loading ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Text style={styles.btnTextPrimary}>💾 Simpan Identitas</Text>
+            <Text style={styles.btnTextPrimary} numberOfLines={1}>
+              💾 Simpan Identitas
+            </Text>
           )}
         </TouchableOpacity>
 
@@ -231,7 +239,9 @@ export const SecureStoreCard = memo(function SecureStoreCard() {
           onPress={handleReadFromKeystore}
           disabled={loading}
         >
-          <Text style={styles.btnTextSecondary}>Cek Keystore</Text>
+          <Text style={styles.btnTextSecondary} numberOfLines={1}>
+            Cek Keystore
+          </Text>
         </TouchableOpacity>
 
         {(storedNIK || storedToken) && (
@@ -240,7 +250,9 @@ export const SecureStoreCard = memo(function SecureStoreCard() {
             onPress={handleDelete}
             disabled={loading}
           >
-            <Text style={styles.btnTextDanger}>Hapus</Text>
+            <Text style={styles.btnTextDanger} numberOfLines={1}>
+              Hapus
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -391,6 +403,13 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontFamily: "monospace",
     maxWidth: "62%",
+    textAlign: "right",
+  },
+  fieldValueStatus: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    maxWidth: "65%",
+    textAlign: "right",
   },
   feedbackBox: {
     padding: 8,

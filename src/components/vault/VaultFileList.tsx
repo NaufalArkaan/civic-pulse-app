@@ -2,6 +2,11 @@
  * Civic Pulse - Pertemuan 10–13
  * Component: VaultFileList
  * Role: Anggota 2 (Lead Frontend & Performance Specialist)
+ *
+ * Responsiveness & Ergonomics:
+ * - Menggunakan 2 baris eksplisit (tanpa flexWrap + flex:1 yang memicu bug tinggi Yoga di React Native)
+ *   agar grid tombol 2x2 selalu presisi, simetris, dan tidak pernah menutupi daftar berkas di bawahnya.
+ * - Tombol aksi memiliki kontras warna WCAG AA yang tegas dan touch target ergonomis (42 dp).
  */
 
 import React, { memo, useCallback } from "react";
@@ -43,61 +48,85 @@ export const VaultFileList = memo(function VaultFileList({
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerTitleBox}>
-          <Text style={styles.sectionTitle}>Berkas Tersimpan</Text>
-          <Text style={styles.fileCount}>
-            {files.length} berkas dalam Scoped Storage (Maks 150 MB/file)
-          </Text>
+      {/* Stacked Header Card: Title Row + Explicit 2x2 Action Grid */}
+      <View style={styles.headerCard}>
+        <View style={styles.titleRow}>
+          <View style={styles.headerTitleBox}>
+            <Text style={styles.sectionTitle}>Berkas Tersimpan di Brankas</Text>
+            <Text style={styles.fileCount}>
+              Penyimpanan Scoped Storage Terisolasi (Maks 150 MB / berkas)
+            </Text>
+          </View>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText} numberOfLines={1}>
+              {files.length} Berkas
+            </Text>
+          </View>
         </View>
 
+        {/* Baris 1: Kamera & Galeri */}
         <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[styles.smallBtn, isImporting && styles.btnDisabled]}
-            onPress={onImportDocument}
-            disabled={isImporting}
-            accessibilityRole="button"
-            accessibilityLabel="Impor dokumen dari perangkat"
-          >
-            {isImporting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.smallBtnText}>+ Dokumen</Text>
-            )}
-          </TouchableOpacity>
-
           {onTakePhoto && (
             <TouchableOpacity
-              style={[styles.smallBtn, { backgroundColor: "#15803D" }, isImporting && styles.btnDisabled]}
+              style={[styles.actionBtnBase, styles.cameraBtn, isImporting && styles.btnDisabled]}
               onPress={onTakePhoto}
               disabled={isImporting}
+              activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Ambil foto langsung dengan kamera"
             >
-              <Text style={styles.smallBtnText}>+ Kamera</Text>
+              <Text style={styles.cameraBtnText} numberOfLines={1}>
+                📸 + Kamera
+              </Text>
             </TouchableOpacity>
           )}
 
           {onImportImage && (
             <TouchableOpacity
-              style={[styles.smallBtnImage, isImporting && styles.btnDisabled]}
+              style={[styles.actionBtnBase, styles.galleryBtn, isImporting && styles.btnDisabled]}
               onPress={onImportImage}
               disabled={isImporting}
+              activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Impor foto atau gambar dari galeri"
             >
-              <Text style={styles.smallBtnImageText}>+ Galeri</Text>
+              <Text style={styles.galleryBtnText} numberOfLines={1}>
+                🖼️ + Galeri
+              </Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Baris 2: Dokumen PDF & Buat Baru */}
+        <View style={[styles.actionRow, styles.actionRowSecond]}>
+          <TouchableOpacity
+            style={[styles.actionBtnBase, styles.docBtn, isImporting && styles.btnDisabled]}
+            onPress={onImportDocument}
+            disabled={isImporting}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Impor dokumen PDF dari perangkat"
+          >
+            {isImporting ? (
+              <ActivityIndicator size="small" color="#1D4ED8" />
+            ) : (
+              <Text style={styles.docBtnText} numberOfLines={1}>
+                📄 + Dokumen
+              </Text>
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.smallBtnSecondary, isImporting && styles.btnDisabled]}
+            style={[styles.actionBtnBase, styles.createBtn, isImporting && styles.btnDisabled]}
             onPress={onCreateDemoReport}
             disabled={isImporting}
+            activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Buat dokumen laporan baru"
           >
-            <Text style={styles.smallBtnSecondaryText}>+ Buat</Text>
+            <Text style={styles.createBtnText} numberOfLines={1}>
+              ✍️ + Buat Baru
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -119,9 +148,22 @@ export const VaultFileList = memo(function VaultFileList({
 const styles = StyleSheet.create({
   container: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
   },
-  headerRow: {
+  headerCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -139,56 +181,75 @@ const styles = StyleSheet.create({
   fileCount: {
     fontSize: 11,
     color: "#64748B",
-    marginTop: 1,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  countBadge: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    flexShrink: 0,
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#1D4ED8",
   },
   actionRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    flexShrink: 0,
   },
-  smallBtn: {
+  actionRowSecond: {
+    marginTop: 8,
+  },
+  actionBtnBase: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraBtn: {
+    backgroundColor: "#15803D",
+    borderColor: "#166534",
+  },
+  cameraBtnText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  galleryBtn: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  galleryBtnText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#047857",
+  },
+  docBtn: {
     backgroundColor: "#EFF6FF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
     borderColor: "#BFDBFE",
-    minHeight: 36,
-    justifyContent: "center",
   },
-  smallBtnText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#1E40AF",
+  docBtnText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#1D4ED8",
   },
-  smallBtnImage: {
-    backgroundColor: "#F0FDF4",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    minHeight: 36,
-    justifyContent: "center",
-  },
-  smallBtnImageText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#166534",
-  },
-  smallBtnSecondary: {
+  createBtn: {
     backgroundColor: "#F8FAFC",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
     borderColor: "#CBD5E1",
-    minHeight: 36,
-    justifyContent: "center",
   },
-  smallBtnSecondaryText: {
-    fontSize: 11.5,
-    fontWeight: "700",
+  createBtnText: {
+    fontSize: 12.5,
+    fontWeight: "800",
     color: "#334155",
   },
   btnDisabled: {

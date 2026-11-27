@@ -1,25 +1,22 @@
 /**
- * Civic Pulse - Pertemuan 10
+ * Civic Pulse - Pertemuan 10–13
  * Component: VaultFileItem
  * Role: Anggota 2 (Lead Frontend & Performance Specialist)
  *
  * Performance, Ergonomics & Accessibility:
  * - Menggunakan `React.memo` untuk mencegah rerender saat item lain dalam list berubah.
- * - Area sentuh memenuhi standar aksesibilitas minimum (touch target >= 44 dp).
- * - Mendukung preview tap via `onOpen(file)`.
- * - Konfirmasi penghapusan eksplisit dengan peringatan yang jelas sebelum menghapus.
+ * - Menggunakan `CivicImage` (Base64 Scoped Storage resolver) agar thumbnail foto lokal selalu tampil tajam.
+ * - Badge dilengkapi `numberOfLines={1}` dan `flexShrink: 0` agar teks tidak pernah terpotong pada Android.
  */
 
-import React, { memo, useState } from "react";
+import React, { memo } from "react";
 import { StyleSheet, Text, View, Alert } from "react-native";
-import { Image } from "expo-image";
 import { VaultFileItemProps } from "../../types/components";
 import { AnimatedPressable } from "../common/AnimatedPressable";
-import { normalizeLocalFileUri } from "../../utils/reportMedia";
+import { CivicImage } from "../common/CivicImage";
 
 export const VaultFileItem = memo(
   function VaultFileItem({ item, onOpen, onDelete }: VaultFileItemProps) {
-    const [thumbError, setThumbError] = useState(false);
     const icon =
       item.category === "photo" ? "📷" : item.category === "document" ? "📄" : "📁";
 
@@ -67,13 +64,13 @@ export const VaultFileItem = memo(
         accessibilityHint="Ketuk untuk melihat rincian dan pratinjau dokumen"
       >
         <View style={styles.iconBox}>
-          {item.category === "photo" && !item.isMissing && !thumbError ? (
-            <Image
-              source={{ uri: normalizeLocalFileUri(item.localUri) || item.localUri }}
+          {item.category === "photo" && !item.isMissing ? (
+            <CivicImage
+              uri={item.localUri}
+              fallbackUri={null}
+              compact
               style={styles.thumbnailImage}
-              contentFit="cover"
-              transition={150}
-              onError={() => setThumbError(true)}
+              accessibilityLabel={`Thumbnail ${item.displayName}`}
             />
           ) : (
             <Text style={styles.iconText}>{icon}</Text>
@@ -85,9 +82,9 @@ export const VaultFileItem = memo(
             {item.displayName}
           </Text>
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{formattedSize}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>{formattedDate}</Text>
+            <Text style={styles.metaText} numberOfLines={1}>
+              {formattedSize} • {formattedDate}
+            </Text>
           </View>
           <View style={styles.badgeRow}>
             <View
@@ -101,10 +98,18 @@ export const VaultFileItem = memo(
                   styles.sandboxBadgeText,
                   item.isMissing && styles.missingBadgeText,
                 ]}
+                numberOfLines={1}
               >
-                {item.isMissing ? "⚠️ Berkas Fisik Hilang" : "App Sandbox (Private)"}
+                {item.isMissing ? "⚠️ Fisik Hilang" : "🔒 Sandbox\u00A0Privat"}
               </Text>
             </View>
+            {!item.isMissing && (
+              <View style={styles.previewHintBadge}>
+                <Text style={styles.previewHintText} numberOfLines={1}>
+                  {item.category === "photo" ? "👁️ Lihat\u00A0Foto" : "📖 Baca\u00A0PDF"}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -112,7 +117,7 @@ export const VaultFileItem = memo(
         <AnimatedPressable
           style={styles.deleteButton}
           onPress={handleDeletePress}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel={`Hapus berkas ${item.displayName}`}
           accessibilityHint="Menghapus berkas fisik dan metadata dari Document Vault"
@@ -127,7 +132,8 @@ export const VaultFileItem = memo(
       prevProps.item.id === nextProps.item.id &&
       prevProps.item.displayName === nextProps.item.displayName &&
       prevProps.item.sizeBytes === nextProps.item.sizeBytes &&
-      prevProps.item.isMissing === nextProps.item.isMissing
+      prevProps.item.isMissing === nextProps.item.isMissing &&
+      prevProps.item.localUri === nextProps.item.localUri
     );
   }
 );
@@ -139,7 +145,7 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#0F172A",
@@ -147,68 +153,84 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
-    minHeight: 64,
+    minHeight: 72,
   },
   containerMissing: {
     borderColor: "#FECACA",
     backgroundColor: "#FEF2F2",
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   thumbnailImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
   },
   iconText: {
-    fontSize: 22,
+    fontSize: 24,
   },
   infoBox: {
     flex: 1,
+    marginRight: 8,
   },
   fileName: {
     fontSize: 13.5,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0F172A",
     marginBottom: 3,
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   metaText: {
     fontSize: 11,
     color: "#64748B",
-    fontWeight: "500",
-  },
-  metaDot: {
-    marginHorizontal: 5,
-    color: "#94A3B8",
-    fontSize: 10,
+    fontWeight: "600",
   },
   badgeRow: {
     flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
   },
   sandboxBadge: {
     backgroundColor: "#F0FDF4",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: "#BBF7D0",
+    flexShrink: 0,
   },
   sandboxBadgeText: {
     color: "#166534",
-    fontSize: 9.5,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  previewHintBadge: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    flexShrink: 0,
+  },
+  previewHintText: {
+    color: "#1D4ED8",
+    fontSize: 10,
     fontWeight: "700",
   },
   missingBadge: {
@@ -217,18 +239,21 @@ const styles = StyleSheet.create({
   },
   missingBadgeText: {
     color: "#991B1B",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "700",
   },
   deleteButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    marginLeft: 4,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    flexShrink: 0,
   },
   deleteButtonText: {
-    fontSize: 18,
+    fontSize: 16,
   },
 });

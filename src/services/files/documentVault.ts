@@ -24,6 +24,7 @@ import {
   sanitizeFileName,
   validateFileEntry,
 } from "../../utils/fileValidation";
+import { primeLocalImageCache } from "../../utils/reportMedia";
 import { FileMetadataRepository } from "./fileMetadataRepository";
 
 /**
@@ -162,13 +163,16 @@ export class DocumentVaultService implements IDocumentVaultService {
       const verifiedFiles = await Promise.all(
         files.map(async (file) => {
           try {
-            const check = await FileSystem.getInfoAsync(file.localUri);
+            const fileName = file.localUri.split("/").pop() || `${file.id}_${file.displayName}`;
+            const activeLocalUri = `${this.vaultDir}${fileName}`;
+            const check = await FileSystem.getInfoAsync(activeLocalUri);
             const checkedSize =
               check.exists && "size" in check && typeof check.size === "number" && check.size > 0
                 ? check.size
                 : file.sizeBytes;
             return {
               ...file,
+              localUri: activeLocalUri,
               isMissing: !check.exists,
               sizeBytes: checkedSize && file.sizeBytes ? Math.max(checkedSize, file.sizeBytes) : checkedSize,
             };
@@ -284,6 +288,10 @@ export class DocumentVaultService implements IDocumentVaultService {
       }
 
       const finalCategory = categoryOverride || validation.category;
+
+      if (finalCategory === "photo" && base64Data) {
+        primeLocalImageCache(targetUri, base64Data, mimeType);
+      }
 
       const vaultEntry: VaultFile = {
         id: fileId,

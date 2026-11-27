@@ -24,7 +24,6 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
-import { Image } from "expo-image";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -35,6 +34,7 @@ import { documentVault } from "../../services/files/documentVault";
 import { LAYOUT_CONSTRAINTS } from "../../constants/breakpoints";
 import { THEME } from "../../constants/theme";
 import { AnimatedPressable } from "../common/AnimatedPressable";
+import { CivicImage } from "../common/CivicImage";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { normalizeLocalFileUri } from "../../utils/reportMedia";
 
@@ -747,12 +747,13 @@ export const ReportCreateModal = React.memo(function ReportCreateModal({
                     selectedVaultFile.endsWith(".jpg") ||
                     selectedVaultFile.endsWith(".jpeg") ||
                     selectedVaultFile.endsWith(".png") ? (
-                      <Image
-                        source={{ uri: normalizeLocalFileUri(selectedVaultFile) || selectedVaultFile }}
+                      <CivicImage
+                        uri={selectedVaultFile}
+                        fallbackUri={null}
+                        category={category}
+                        compact
                         style={styles.attachedThumbnail}
-                        contentFit="cover"
-                        transition={150}
-                        onError={() => setSelectedVaultFileType("other")}
+                        accessibilityLabel={`Lampiran ${selectedVaultFileName || "Foto"}`}
                       />
                     ) : (
                       <View style={styles.attachedDocBox}>
