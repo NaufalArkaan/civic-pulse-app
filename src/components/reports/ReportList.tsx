@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 32,
+    paddingBottom: 110,
   },
   cacheNotice: {
     backgroundColor: "#FFFBEB",
@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 10,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: 16,
   },
   cacheNoticeText: {
     fontSize: 11,

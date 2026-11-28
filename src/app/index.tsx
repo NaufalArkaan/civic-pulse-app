@@ -32,7 +32,7 @@ import {
 } from "../components/map";
 import { reportSearchService } from "../services/reports/reportSearchService";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { AnimatedPressable } from "../components/common";
+import { AnimatedPressable, FloatingNavBar } from "../components/common";
 
 export default function MapScreen() {
   const router = useRouter();
@@ -219,7 +219,7 @@ export default function MapScreen() {
       </View>
 
       {/* Bottom Floating Card: Detail Laporan Terpilih & Jarak Haversine */}
-      {selectedReport && (
+      {selectedReport ? (
         <SelectedReportCard
           report={selectedReport}
           userLocation={userLocation}
@@ -228,6 +228,8 @@ export default function MapScreen() {
           onFocusReport={handleFocusReport}
           insets={insets}
         />
+      ) : (
+        <FloatingNavBar currentTab="map" />
       )}
     </View>
   );
@@ -254,49 +256,49 @@ const styles = StyleSheet.create({
   reportsPillButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0369A1",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 22,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
     elevation: 4,
     borderWidth: 1,
-    borderColor: "#0284C7",
+    borderColor: "#3B82F6",
   },
   reportsPillIcon: {
     fontSize: 13,
     marginRight: 6,
   },
   reportsPillText: {
-    color: "#F0F9FF",
-    fontSize: 12,
+    color: "#FFFFFF",
+    fontSize: 12.5,
     fontWeight: "700",
   },
   vaultPillButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1E293B",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 22,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 4,
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   vaultPillIcon: {
     fontSize: 13,
     marginRight: 6,
   },
   vaultPillText: {
-    color: "#F8FAFC",
-    fontSize: 12,
+    color: "#FFFFFF",
+    fontSize: 12.5,
     fontWeight: "700",
   },
 });

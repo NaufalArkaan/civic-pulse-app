@@ -33,6 +33,7 @@ import {
     VaultJitModal,
     VaultPermissionNotice,
 } from "../components/vault";
+import { FloatingNavBar } from "../components/common";
 import { useDocumentVault } from "../hooks/useDocumentVault";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { VaultFile, VaultFileCategory } from "../types/vault";
@@ -240,7 +241,7 @@ ${docNotes.trim() || "-"}`;
         { paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
     >
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <View style={[styles.contentWrapper, centeredContainerStyle]}>
         {/* Header Bar dengan Ringkasan Metrik (KB / MB) */}
@@ -523,6 +524,9 @@ ${docNotes.trim() || "-"}`;
           </View>
         </View>
       </Modal>
+
+      {/* Floating Pill Bottom Navigation (Sesuai Desain Referensi) */}
+      <FloatingNavBar currentTab="vault" />
     </View>
   );
 }
@@ -530,7 +534,7 @@ ${docNotes.trim() || "-"}`;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#F8FAFC",
   },
   contentWrapper: {
     flex: 1,
@@ -581,7 +585,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   bottomSpacer: {
-    height: 24,
+    height: 110,
   },
   modalBackdrop: {
     flex: 1,

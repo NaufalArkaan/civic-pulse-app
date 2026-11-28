@@ -45,7 +45,12 @@ import {
   ReportList,
   ReportCreateModal,
 } from "../components/reports";
-import { AnimatedPressable, FeedbackToast, CivicImage } from "../components/common";
+import {
+  AnimatedPressable,
+  FeedbackToast,
+  CivicImage,
+  FloatingNavBar,
+} from "../components/common";
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
@@ -215,11 +220,11 @@ export default function ReportsScreen() {
       if (res.syncOutcome === "queued_offline") {
         setToastType("info");
         setToastMessage(
-          "Disimpan di Outbox Offline (Laporan akan disinkronkan ke Supabase saat online)"
+          "Disimpan di Outbox Offline (Laporan akan disinkronkan saat online)"
         );
       } else if (res.syncOutcome === "confirmed_remote") {
         setToastType("success");
-        setToastMessage("Terkonfirmasi Server: Laporan baru berhasil dibuat di Supabase");
+        setToastMessage("Laporan baru berhasil disinkronkan ke server");
       } else {
         setToastType("success");
         setToastMessage("Laporan baru berhasil disimpan");
@@ -307,7 +312,7 @@ export default function ReportsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
@@ -315,7 +320,7 @@ export default function ReportsScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
         <View style={[styles.contentWrapper, centeredContainerStyle]}>
-          {/* Top Header Bar */}
+          {/* Top Header Bar — minimalis, hanya judul dan tombol kembali ke peta */}
           <View style={styles.header}>
             <View style={styles.topRow}>
               <AnimatedPressable
@@ -330,29 +335,7 @@ export default function ReportsScreen() {
 
               <View style={styles.titleContainer}>
                 <Text style={styles.title}>Laporan & Mitigasi</Text>
-                <Text style={styles.subtitle}>Real-Time Pipeline & RxJS Search</Text>
-              </View>
-
-              <View style={styles.headerActionGroup}>
-                <AnimatedPressable
-                  style={styles.createReportButton}
-                  onPress={() => setIsCreateModalVisible(true)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Buat laporan insiden baru"
-                >
-                  <Text style={styles.createReportButtonText}>+ Lapor</Text>
-                </AnimatedPressable>
-
-                <AnimatedPressable
-                  style={styles.vaultButton}
-                  onPress={() => router.push("/vault" as any)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Buka Document Vault"
-                >
-                  <Text style={styles.vaultButtonText}>🔐 Vault</Text>
-                </AnimatedPressable>
+                <Text style={styles.subtitle}>Real-Time Feed</Text>
               </View>
             </View>
           </View>
@@ -377,6 +360,14 @@ export default function ReportsScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+
+      {/* Floating Pill Bottom Navigation (Sesuai Desain Referensi) */}
+      <FloatingNavBar
+        currentTab="reports"
+        onPressAction={() => setIsCreateModalVisible(true)}
+        actionLabel="+ Lapor"
+        actionIcon="⚡"
+      />
 
       {/* Detail Modal Pop-up */}
       <Modal
@@ -530,7 +521,7 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#F8FAFC",
   },
   keyboardAvoid: {
     flex: 1,
@@ -539,12 +530,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    backgroundColor: "#1E293B",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#334155",
+    borderBottomColor: "rgba(15, 23, 42, 0.05)",
   },
   topRow: {
     flexDirection: "row",
@@ -552,16 +543,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   backButton: {
-    minHeight: 36,
+    minHeight: 38,
     paddingHorizontal: 12,
-    backgroundColor: "#334155",
-    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 19,
     marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   backButtonText: {
-    color: "#93C5FD",
+    color: "#334155",
     fontSize: 12.5,
     fontWeight: "700",
   },
@@ -569,45 +560,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: "#FFFFFF",
-    fontSize: 17,
+    color: "#0F172A",
+    fontSize: 19,
     fontWeight: "800",
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: "#94A3B8",
-    fontSize: 11,
-    marginTop: 2,
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 1,
     fontWeight: "500",
   },
   headerActionGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    // Removed — tombol navigasi sudah tersedia di FloatingNavBar
+    display: "none",
   },
   createReportButton: {
-    minHeight: 36,
-    paddingHorizontal: 11,
-    backgroundColor: "#0284C7",
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+    // Removed — tombol + Lapor sudah tersedia di FloatingNavBar
+    display: "none",
   },
   createReportButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
   vaultButton: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    backgroundColor: "#334155",
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+    // Removed — tombol Vault sudah tersedia di FloatingNavBar
+    display: "none",
   },
   vaultButtonText: {
-    color: "#F8FAFC",
-    fontSize: 12.5,
+    color: "#334155",
+    fontSize: 12,
     fontWeight: "700",
   },
   scrollArea: {
@@ -664,15 +647,15 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 28,
+    padding: 20,
     width: "100%",
     maxWidth: LAYOUT_CONSTRAINTS.maxModalWidth,
     maxHeight: "80%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
     elevation: 8,
   },
   modalHeader: {

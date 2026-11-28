@@ -7,12 +7,10 @@
 import { Report } from "../../types/report";
 import { SearchCriteria, normalizeQuery } from "../../types/search";
 import { getDatabase } from "./sqliteDatabase";
-import { SAMPLE_CIVIC_REPORTS } from "../../constants/sampleReports";
-
 // In-memory fallback jika platform atau SQLite driver belum siap
-const memoryFallbackCache: Map<string, Report> = new Map(
-  SAMPLE_CIVIC_REPORTS.map((r) => [r.id, r])
-);
+// CATATAN: Tidak diinisialisasi dengan data dummy agar tidak mencemari cache
+// dengan mediaPath lokal yang tidak valid di perangkat lain.
+const memoryFallbackCache: Map<string, Report> = new Map();
 
 export class ReportCacheRepository {
   /**

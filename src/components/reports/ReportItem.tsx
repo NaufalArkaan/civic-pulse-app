@@ -1,29 +1,30 @@
 /**
- * Civic Pulse - Pertemuan 11
- * Component: ReportItem
- * Role: Anggota 2 (Lead Frontend & Reactive UI Specialist)
+ * Civic Pulse - Redesign Pertemuan 13
+ * Component: ReportItem (Modern Minimalist Real-Time Feed Card)
+ * Role: Anggota 2 (Lead Frontend & UI Specialist)
  *
- * Performance & Ergonomics Safeguards:
- * - Menggunakan `React.memo` dengan comparator spesifik untuk mencegah re-render seluruh item
- *   ketika ada event realtime INSERT/UPDATE/DELETE pada item lain.
- * - Touch target tombol aksi memenuhi standar minimum aksesibilitas (>= 44 dp).
- * - Indikator live realtime badge untuk laporan yang baru saja diterima.
- * - Aksesibilitas penuh untuk screen reader (TalkBack & VoiceOver).
+ * Desain Modern & Clean (Mengacu pada Screenshot Referensi):
+ * - Card membulat (radius 24dp) dengan shadow sangat halus dan border tipis elegan.
+ * - Pill badge kategori dan status penanganan dengan warna pastel harmonis.
+ * - Foto laporan ditampilkan sebagai elemen heroik berukuran proporsional (height 175dp, radius 18dp)
+ *   tanpa terpotong secara canggung, lengkap dengan placeholder resmi jika belum ada foto.
+ * - Tombol aksi alur penanganan berbentuk pill modern yang ramah sentuhan (>= 44dp).
+ * - React.memo comparator ketat untuk mempertahankan performa 16ms (60 FPS).
  */
 
-import { memo, useCallback } from "react";
+import React, { memo, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, {
-    ReduceMotion,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
 } from "react-native-reanimated";
 import { CivicReportCategory, Report, ReportStatus } from "../../types/report";
 import {
   getReportPhotoUri,
   isReportDocumentMedia,
-  DISASTER_CATEGORY_PHOTOS,
+  getReportMediaFilename,
 } from "../../utils/reportMedia";
 import { CivicImage } from "../common/CivicImage";
 
@@ -41,10 +42,10 @@ const CATEGORY_ICONS: Record<CivicReportCategory, string> = {
 };
 
 const CATEGORY_NAMES: Record<CivicReportCategory, string> = {
-  "road-damage": "Kerusakan Jalan",
+  "road-damage": "Jalan Rusak",
   flood: "Banjir / Genangan",
   landslide: "Tanah Longsor",
-  "street-light": "Lampu PJU Padam",
+  "street-light": "Lampu PJU",
 };
 
 const STATUS_LABELS: Record<
@@ -60,33 +61,33 @@ const STATUS_LABELS: Record<
   verified: {
     label: "Terverifikasi",
     color: "#2563EB",
-    bg: "#DBEAFE",
+    bg: "#EFF6FF",
     borderColor: "#BFDBFE",
   },
   in_progress: {
     label: "Sedang Diproses",
     color: "#7C3AED",
-    bg: "#EDE9FE",
+    bg: "#F5F3FF",
     borderColor: "#DDD6FE",
   },
   resolved: {
     label: "Telah Selesai",
     color: "#059669",
-    bg: "#D1FAE5",
+    bg: "#ECFDF5",
     borderColor: "#A7F3D0",
   },
   rejected: {
     label: "Ditolak",
     color: "#DC2626",
-    bg: "#FEE2E2",
+    bg: "#FEF2F2",
     borderColor: "#FECACA",
   },
 };
 
-const SEVERITY_LABELS: Record<string, { label: string; color: string }> = {
-  high: { label: "Kritis", color: "#DC2626" },
-  medium: { label: "Sedang", color: "#D97706" },
-  low: { label: "Rendah", color: "#059669" },
+const SEVERITY_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  high: { label: "Kritis", color: "#DC2626", bg: "#FEE2E2" },
+  medium: { label: "Sedang", color: "#D97706", bg: "#FEF3C7" },
+  low: { label: "Rendah", color: "#059669", bg: "#DCFCE7" },
 };
 
 export const ReportItem = memo(
@@ -98,33 +99,27 @@ export const ReportItem = memo(
     const icon = CATEGORY_ICONS[report.category] || "📍";
     const categoryName = CATEGORY_NAMES[report.category] || report.category;
     const statusInfo = STATUS_LABELS[report.status] || STATUS_LABELS.submitted;
-    const severityInfo =
-      SEVERITY_LABELS[report.severity] || SEVERITY_LABELS.medium;
+    const severity = SEVERITY_INFO[report.severity] || SEVERITY_INFO.medium;
     const photoUri = getReportPhotoUri(report);
+    const isDocument = isReportDocumentMedia(report);
+    const docFilename = getReportMediaFilename(report);
 
-    const formattedDate = new Date(report.createdAt).toLocaleDateString(
-      "id-ID",
-      {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      },
-    );
+    const formattedDate = new Date(report.createdAt).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-    // Indikator laporan baru masuk (dibuat kurang dari 3 menit yang lalu)
     const isRecentlyCreated =
       Date.now() - new Date(report.createdAt).getTime() < 3 * 60 * 1000;
 
-    const a11yLabel = `Laporan ${categoryName}: ${report.title}. Status: ${
-      statusInfo.label
-    }. Tingkat: ${severityInfo.label}. Waktu: ${formattedDate}.`;
+    const a11yLabel = `Laporan ${categoryName}: ${report.title}. Status: ${statusInfo.label}. Tingkat urgensi: ${severity.label}.`;
 
-    // Reanimated Shared Value untuk micro-interaction press feedback
     const scale = useSharedValue(1);
 
     const handlePressIn = useCallback(() => {
-      scale.value = withSpring(0.98, {
+      scale.value = withSpring(0.985, {
         damping: 15,
         stiffness: 250,
         reduceMotion: ReduceMotion.System,
@@ -150,119 +145,128 @@ export const ReportItem = memo(
           onPress={() => onPressItem?.(report)}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          activeOpacity={onPressItem ? 0.7 : 1}
+          activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={a11yLabel}
-          accessibilityHint={
-            onPressItem
-              ? "Ketuk untuk melihat detail lokasi dan laporan"
-              : undefined
-          }
         >
-          {/* Top Header Row: Category Badge & Status Pill */}
+          {/* 1. Header Badges: Kategori, Status Penanganan & Urgensi */}
           <View style={styles.topRow}>
             <View style={styles.badgeGroup}>
-              <View style={styles.categoryBadge}>
+              <View style={styles.categoryPill}>
                 <Text style={styles.categoryIcon}>{icon}</Text>
                 <Text style={styles.categoryName}>{categoryName}</Text>
               </View>
 
               {isRecentlyCreated && (
-                <View style={styles.liveBadge}>
-                  <Text style={styles.liveBadgeText}>⚡ Live Baru</Text>
+                <View style={styles.livePulseBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeText}>Live</Text>
                 </View>
               )}
             </View>
 
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: statusInfo.bg,
-                  borderColor: statusInfo.borderColor,
-                },
-              ]}
-            >
-              <Text style={[styles.statusText, { color: statusInfo.color }]}>
-                {statusInfo.label}
-              </Text>
+            <View style={styles.rightBadges}>
+              <View
+                style={[
+                  styles.statusPill,
+                  { backgroundColor: statusInfo.bg, borderColor: statusInfo.borderColor },
+                ]}
+              >
+                <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                  {statusInfo.label}
+                </Text>
+              </View>
+
+              <View style={[styles.severityPill, { backgroundColor: severity.bg }]}>
+                <Text style={[styles.severityText, { color: severity.color }]}>
+                  {severity.label}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Title, Description & Photo Thumbnail Row */}
-          <View style={styles.bodyRow}>
-            <View style={styles.bodyTextContainer}>
-              <Text style={styles.title} numberOfLines={2}>
-                {report.title}
-              </Text>
+          {/* 2. Judul & Deskripsi Laporan */}
+          <View style={styles.contentSection}>
+            <Text style={styles.title} numberOfLines={2}>
+              {report.title}
+            </Text>
+            {report.description ? (
               <Text style={styles.description} numberOfLines={2}>
                 {report.description}
               </Text>
-            </View>
-            {isReportDocumentMedia(report) ? (
-              <View style={styles.thumbnailDocBox}>
-                <Text style={styles.thumbnailDocIcon}>📄</Text>
-                <Text style={styles.thumbnailDocLabel}>PDF</Text>
+            ) : null}
+          </View>
+
+          {/* 3. Hero Photo Showcase Area (Ukuran Konsisten & Proporsional) */}
+          <View style={styles.mediaContainer}>
+            {isDocument ? (
+              <View style={styles.documentCardBox}>
+                <View style={styles.documentIconCircle}>
+                  <Text style={styles.documentIconText}>📄</Text>
+                </View>
+                <View style={styles.documentTextCol}>
+                  <Text style={styles.documentFilename} numberOfLines={1}>
+                    {docFilename || "Dokumen_Bukti.pdf"}
+                  </Text>
+                  <Text style={styles.documentSubText}>
+                    Dokumen lampiran resmi • Ketuk untuk membaca
+                  </Text>
+                </View>
+                <Text style={styles.documentActionArrow}>→</Text>
               </View>
             ) : (
               <CivicImage
                 uri={photoUri}
-                fallbackUri={DISASTER_CATEGORY_PHOTOS[report.category]}
                 category={report.category}
-                compact
-                style={styles.thumbnailPhoto}
-                accessibilityLabel={`Thumbnail laporan ${report.title}`}
+                style={styles.heroPhoto}
+                contentFit="cover"
+                label={report.title}
+                accessibilityLabel={`Foto bukti laporan ${report.title}`}
               />
             )}
           </View>
 
-          {/* Metadata & Actions Footer */}
+          {/* 4. Footer Metadata & Tombol Aksi Workflow */}
           <View style={styles.footerRow}>
             <View style={styles.metaLeft}>
-              <Text style={styles.timestamp}>📅 {formattedDate}</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text
-                style={[styles.severityText, { color: severityInfo.color }]}
-              >
-                {severityInfo.label}
-              </Text>
+              <Text style={styles.timestampText}>🕒 {formattedDate}</Text>
             </View>
 
             {/* Quick Action Workflow Buttons */}
             <View style={styles.actionGroup}>
               {onUpdateStatus && report.status === "submitted" && (
                 <TouchableOpacity
-                  style={styles.verifyBtn}
+                  style={styles.verifyPillBtn}
                   onPress={() => onUpdateStatus(report.id, "verified")}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
                   accessibilityLabel="Verifikasi laporan ini"
                 >
-                  <Text style={styles.verifyBtnText}>✓ Verifikasi</Text>
+                  <Text style={styles.verifyPillText}>✓ Verifikasi</Text>
                 </TouchableOpacity>
               )}
 
               {onUpdateStatus && report.status === "verified" && (
                 <TouchableOpacity
-                  style={styles.progressBtn}
+                  style={styles.progressPillBtn}
                   onPress={() => onUpdateStatus(report.id, "in_progress")}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
                   accessibilityLabel="Tandai laporan sedang diproses petugas"
                 >
-                  <Text style={styles.progressBtnText}>⚙️ Proses</Text>
+                  <Text style={styles.progressPillText}>⚙️ Proses</Text>
                 </TouchableOpacity>
               )}
 
               {onUpdateStatus && report.status === "in_progress" && (
                 <TouchableOpacity
-                  style={styles.resolveBtn}
+                  style={styles.resolvePillBtn}
                   onPress={() => onUpdateStatus(report.id, "resolved")}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
                   accessibilityLabel="Tandai laporan telah selesai ditangani"
                 >
-                  <Text style={styles.resolveBtnText}>✨ Selesai</Text>
+                  <Text style={styles.resolvePillText}>✨ Selesai</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -278,199 +282,231 @@ export const ReportItem = memo(
       prevProps.report.severity === nextProps.report.severity &&
       prevProps.report.category === nextProps.report.category &&
       prevProps.report.mediaPath === nextProps.report.mediaPath &&
-      prevProps.report.isSimulation === nextProps.report.isSimulation &&
       prevProps.report.title === nextProps.report.title &&
       prevProps.report.description === nextProps.report.description &&
       prevProps.report.updatedAt === nextProps.report.updatedAt &&
       prevProps.onUpdateStatus === nextProps.onUpdateStatus &&
       prevProps.onPressItem === nextProps.onPressItem
     );
-  },
+  }
 );
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
     marginHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(15, 23, 42, 0.05)",
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 2,
   },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
+    gap: 8,
   },
   badgeGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  categoryBadge: {
+  categoryPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  categoryIcon: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  categoryName: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  liveBadge: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#A7F3D0",
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  liveBadgeText: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#059669",
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  statusText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-  },
-  title: {
-    fontSize: 14.5,
-    fontWeight: "800",
-    color: "#0F172A",
-    marginBottom: 4,
-    lineHeight: 19,
-  },
-  bodyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 8,
-  },
-  bodyTextContainer: {
-    flex: 1,
-  },
-  thumbnailPhoto: {
-    width: 68,
-    height: 68,
-    borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
-  thumbnailDocBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 8,
-    backgroundColor: "#F0FDF4",
+  categoryIcon: {
+    fontSize: 13,
+    marginRight: 5,
+  },
+  categoryName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  livePulseBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  liveBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#059669",
+    letterSpacing: 0.2,
+  },
+  rightBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: -0.1,
+  },
+  severityPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  severityText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  contentSection: {
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    lineHeight: 22,
+    letterSpacing: -0.2,
+  },
+  description: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  mediaContainer: {
+    borderRadius: 18,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  heroPhoto: {
+    width: "100%",
+    height: 175,
+    borderRadius: 18,
+  },
+  documentCardBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  documentIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  thumbnailDocIcon: {
-    fontSize: 24,
-    marginBottom: 2,
+  documentIconText: {
+    fontSize: 22,
   },
-  thumbnailDocLabel: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#166534",
+  documentTextCol: {
+    flex: 1,
   },
-  description: {
-    fontSize: 12.5,
-    color: "#475569",
-    lineHeight: 18,
-    marginBottom: 10,
+  documentFilename: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  documentSubText: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  documentActionArrow: {
+    fontSize: 16,
+    color: "#2563EB",
+    fontWeight: "700",
+    paddingRight: 4,
   },
   footerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
     paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(15, 23, 42, 0.04)",
   },
   metaLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
-  timestamp: {
-    fontSize: 11,
-    color: "#64748B",
+  timestampText: {
+    fontSize: 11.5,
+    color: "#94A3B8",
     fontWeight: "500",
-  },
-  metaDot: {
-    marginHorizontal: 6,
-    color: "#CBD5E1",
-    fontSize: 10,
-  },
-  severityText: {
-    fontSize: 11,
-    fontWeight: "700",
   },
   actionGroup: {
     flexDirection: "row",
     gap: 6,
   },
-  verifyBtn: {
+  verifyPillBtn: {
     backgroundColor: "#2563EB",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 18,
+    minHeight: 34,
     justifyContent: "center",
   },
-  verifyBtnText: {
+  verifyPillText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
   },
-  progressBtn: {
+  progressPillBtn: {
     backgroundColor: "#7C3AED",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 18,
+    minHeight: 34,
     justifyContent: "center",
   },
-  progressBtnText: {
+  progressPillText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
   },
-  resolveBtn: {
+  resolvePillBtn: {
     backgroundColor: "#059669",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 18,
+    minHeight: 34,
     justifyContent: "center",
   },
-  resolveBtnText: {
+  resolvePillText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
   },
 });

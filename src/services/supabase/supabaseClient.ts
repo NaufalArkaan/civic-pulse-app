@@ -124,23 +124,48 @@ export class SupabaseRestClient {
       }
 
       const rows = (await response.json()) as any[];
-      const mapped: Report[] = rows.map((row) => ({
-        id: String(row.id),
-        reporterId: row.reporter_id ?? undefined,
-        title: String(row.title || ""),
-        category: row.category,
-        description: String(row.description || ""),
-        status: row.status,
-        coordinate: {
-          latitude: Number(row.latitude),
-          longitude: Number(row.longitude),
-        },
-        mediaPath: row.media_path ?? null,
-        createdAt: String(row.created_at),
-        updatedAt: String(row.updated_at),
-        severity: row.severity || "medium",
-        isSimulation: false,
-      }));
+      const mapped: Report[] = rows.map((row) => {
+        const rawMediaPath = row.media_path ? String(row.media_path).trim() : null;
+        let resolvedMediaPath: string | null = rawMediaPath;
+
+        if (rawMediaPath) {
+          if (
+            rawMediaPath.startsWith("http://") ||
+            rawMediaPath.startsWith("https://") ||
+            rawMediaPath.startsWith("file:") ||
+            rawMediaPath.startsWith("content:") ||
+            rawMediaPath.startsWith("data:")
+          ) {
+            // URL lengkap atau URI lokal — gunakan apa adanya
+            resolvedMediaPath = rawMediaPath;
+          } else if (rawMediaPath.startsWith("reports/")) {
+            // Object key Supabase Storage yang valid — konstruksi public URL
+            resolvedMediaPath = `${this.baseUrl}/storage/v1/object/public/civic-reports-media/${rawMediaPath}`;
+          } else {
+            // Path tidak dikenali (misalnya filename lama dari data sebelumnya) — jadikan null
+            // agar CivicImage menampilkan placeholder kategori yang benar, bukan URL Storage yang salah
+            resolvedMediaPath = null;
+          }
+        }
+
+        return {
+          id: String(row.id),
+          reporterId: row.reporter_id ?? undefined,
+          title: String(row.title || ""),
+          category: row.category,
+          description: String(row.description || ""),
+          status: row.status,
+          coordinate: {
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+          },
+          mediaPath: resolvedMediaPath,
+          createdAt: String(row.created_at),
+          updatedAt: String(row.updated_at),
+          severity: row.severity || "medium",
+          isSimulation: false,
+        };
+      });
 
       return { data: mapped, error: null, status: response.status };
     } catch (err) {

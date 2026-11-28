@@ -17,6 +17,7 @@ import {
   validateStatusTransition,
   UserRole,
 } from "../supabase/supabaseClient";
+import { supabaseStorageService } from "../supabase/supabaseStorageService";
 import { classifyAppError } from "../../utils/errorTaxonomy";
 
 export type MutationSyncOutcome = "confirmed_remote" | "queued_offline" | "updated_local";
@@ -161,6 +162,27 @@ export class ReportRepository {
 
     if (isOnline) {
       if (supabaseRestClient.isReady()) {
+        // Unggah foto lokal ke Supabase Storage terlebih dahulu agar URL publik konsisten di seluruh perangkat
+        if (
+          report.mediaPath &&
+          !report.mediaPath.startsWith("http") &&
+          supabaseStorageService.isConfigured()
+        ) {
+          try {
+            const uploadRes = await supabaseStorageService.uploadReportPhotoAsync(
+              report.mediaPath,
+              report.id
+            );
+            if (uploadRes.success && uploadRes.publicUrl) {
+              report.mediaPath = uploadRes.publicUrl;
+              this.localOverrides.set(report.id, report);
+              await reportCacheRepository.upsertReport(report);
+            }
+          } catch {
+            // Lanjutkan jika upload storage gagal sementara
+          }
+        }
+
         const remoteRes = await supabaseRestClient.upsertReportRemote(report, idempotencyKey);
         if (!remoteRes.confirmed) {
           await outboxRepository.enqueueOperation("CREATE_REPORT", report, idempotencyKey);
@@ -362,9 +384,31 @@ export class ReportRepository {
         await outboxRepository.markProcessing(opId);
 
         if (op.type === "CREATE_REPORT" || op.operation_type === "CREATE_REPORT") {
+          const reportPayload: Report = { ...op.payload };
+          // Jika foto masih berupa URI lokal saat offline, unggah ke Supabase Storage terlebih dahulu
+          if (
+            reportPayload.mediaPath &&
+            !reportPayload.mediaPath.startsWith("http") &&
+            supabaseStorageService.isConfigured()
+          ) {
+            try {
+              const uploadRes = await supabaseStorageService.uploadReportPhotoAsync(
+                reportPayload.mediaPath,
+                reportPayload.id
+              );
+              if (uploadRes.success && uploadRes.publicUrl) {
+                reportPayload.mediaPath = uploadRes.publicUrl;
+                this.localOverrides.set(reportPayload.id, reportPayload);
+                await reportCacheRepository.upsertReport(reportPayload);
+              }
+            } catch {
+              // Jika upload gagal, operasi outbox akan di-retry sesuai kebijakan backoff
+            }
+          }
+
           if (supabaseRestClient.isReady()) {
             await supabaseRestClient.upsertReportRemote(
-              op.payload,
+              reportPayload,
               op.idempotencyKey || `idemp_${opId}`
             );
           }
